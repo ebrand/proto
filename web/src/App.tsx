@@ -3,6 +3,7 @@ import { RequireAuth } from './components/RequireAuth';
 import { Login } from './pages/Login';
 import { Authenticate } from './pages/Authenticate';
 import { Dashboard } from './pages/Dashboard';
+import { Account } from './pages/Account';
 
 export default function App() {
   return (
@@ -14,6 +15,14 @@ export default function App() {
         element={
           <RequireAuth>
             <Dashboard />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/account"
+        element={
+          <RequireAuth>
+            <Account />
           </RequireAuth>
         }
       />

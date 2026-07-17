@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import {
   useStytchB2BClient,
   useStytchMember,
@@ -19,7 +20,10 @@ export function Dashboard() {
     <div className="page">
       <header className="page-header">
         <h1>Proto</h1>
-        <button onClick={logout}>Sign out</button>
+        <nav className="nav">
+          <Link to="/account">Account</Link>
+          <button onClick={logout}>Sign out</button>
+        </nav>
       </header>
 
       <section className="card">

@@ -90,6 +90,44 @@ body {
   padding: 1.5rem;
 }
 
+.card + .card {
+  margin-top: 1rem;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.nav a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.nav a:hover {
+  text-decoration: underline;
+}
+
+.identity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.identity-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.identity-list li:last-child {
+  border-bottom: none;
+}
+
 .kv {
   display: grid;
   grid-template-columns: max-content 1fr;
