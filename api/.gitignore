@@ -1,0 +1,5 @@
+bin/
+obj/
+# Do not commit local overrides that may hold secrets.
+appsettings.*.local.json
+*.user
