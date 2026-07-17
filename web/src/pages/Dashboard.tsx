@@ -4,13 +4,15 @@ import {
   useStytchMember,
   useStytchOrganization,
 } from '@stytch/react/b2b';
+import { useMe } from '../hooks/useMe';
 
-// Placeholder authenticated landing page. Confirms the session resolved to a
-// Member within an Organization (our User within a Tenant) and offers logout.
+// Authenticated landing page. Shows the DB-backed Proto tenant/user (from
+// /api/me) plus the raw Stytch session, and offers logout.
 export function Dashboard() {
   const stytch = useStytchB2BClient();
   const { member } = useStytchMember();
   const { organization } = useStytchOrganization();
+  const { me, state, error } = useMe();
 
   const logout = () => {
     void stytch.session.revoke();
@@ -27,7 +29,35 @@ export function Dashboard() {
       </header>
 
       <section className="card">
-        <h2>Session</h2>
+        <h2>Tenant (Proto)</h2>
+        {state === 'loading' && <p className="muted">Loading your tenant…</p>}
+        {state === 'error' && <p className="error">Couldn’t load /api/me: {error}</p>}
+        {state === 'not_provisioned' && (
+          <p className="muted">This session isn’t linked to a Proto tenant yet.</p>
+        )}
+        {state === 'ready' && me && (
+          <dl className="kv">
+            <dt>Tenant</dt>
+            <dd>{me.tenant.name}</dd>
+            <dt>Slug</dt>
+            <dd className="mono">{me.tenant.slug}</dd>
+            <dt>Plan</dt>
+            <dd>
+              {me.tenant.subscriptionTierCode}{' '}
+              <span className="muted">({me.tenant.subscriptionStatus})</span>
+            </dd>
+            <dt>Your role</dt>
+            <dd>{me.user.tenantRole}</dd>
+            <dt>You</dt>
+            <dd>
+              {me.user.displayName} <span className="muted">&lt;{me.user.email}&gt;</span>
+            </dd>
+          </dl>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>Session (Stytch)</h2>
         <dl className="kv">
           <dt>Member</dt>
           <dd>{member?.email_address ?? '—'}</dd>
