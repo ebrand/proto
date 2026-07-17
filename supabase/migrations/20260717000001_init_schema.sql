@@ -10,8 +10,10 @@
 --  * gen_random_uuid() is built into Postgres 13+; no extension required.
 --  * Sync keys (stytch_organization_id, stytch_member_id) are additions beyond
 --    the JSON Schemas, needed to map Stytch Organizations/Members -> our rows.
-
-begin;
+--  * No explicit begin/commit wrapper: the Supabase migration runner (and the
+--    MCP apply_migration path this was applied through) already runs each
+--    migration inside a transaction, so an inner begin/commit is redundant and
+--    can prematurely commit the wrapper.
 
 -- ---------------------------------------------------------------------------
 -- Enums
@@ -293,5 +295,3 @@ alter table hotspots               enable row level security;
 alter table comments               enable row level security;
 alter table approval_requests      enable row level security;
 alter table approval_decisions     enable row level security;
-
-commit;
