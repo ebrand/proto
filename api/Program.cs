@@ -7,6 +7,15 @@ using Stytch.net.Clients;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Railway/Heroku-style hosts assign the listening port via $PORT. Bind to it
+// (on 0.0.0.0) when present; locally $PORT is unset so ASPNETCORE_URLS / the
+// launch profile still apply.
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrEmpty(port))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
 // --- Configuration binding -------------------------------------------------
 builder.Services.Configure<StytchOptions>(
     builder.Configuration.GetSection(StytchOptions.SectionName));
