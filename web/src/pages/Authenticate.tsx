@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStytchB2BClient, useStytchMemberSession } from '@stytch/react/b2b';
-import { signupTenant } from '../lib/api';
+import { acceptInvite, signupTenant } from '../lib/api';
 
 // Minimal shape we read from a discovered organization.
 type DiscoveredOrg = {
@@ -47,25 +47,49 @@ export function Authenticate() {
 
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
-    if (!token || params.get('stytch_token_type') !== 'discovery_oauth') {
-      // No token in the URL — nothing to complete here.
+    const tokenType = params.get('stytch_token_type');
+    if (!token) {
       setPhase('error');
-      setError('Missing or invalid discovery token. Start again from sign-in.');
+      setError('Missing token. Start again from sign-in.');
       return;
     }
 
-    stytch.oauth.discovery
-      .authenticate({ discovery_oauth_token: token })
-      .then((res) => {
-        setIst(res.intermediate_session_token);
-        setOrgs(res.discovered_organizations);
-        setPhase(res.discovered_organizations.length > 0 ? 'choose' : 'create');
-      })
-      .catch((e: unknown) => {
-        setPhase('error');
-        setError(e instanceof Error ? e.message : String(e));
-      });
-  }, [stytch]);
+    if (tokenType === 'multi_tenant_magic_links') {
+      // Invite acceptance: authenticate the magic link (logs into the org),
+      // then activate the pending Proto user row.
+      stytch.magicLinks
+        .authenticate({ magic_links_token: token, session_duration_minutes: 60 })
+        .then(async () => {
+          const tokens = stytch.session.getTokens();
+          const bearer = tokens?.session_jwt || tokens?.session_token;
+          if (bearer) await acceptInvite(bearer);
+          navigate('/dashboard', { replace: true });
+        })
+        .catch((e: unknown) => {
+          setPhase('error');
+          setError(e instanceof Error ? e.message : String(e));
+        });
+      return;
+    }
+
+    if (tokenType === 'discovery_oauth') {
+      stytch.oauth.discovery
+        .authenticate({ discovery_oauth_token: token })
+        .then((res) => {
+          setIst(res.intermediate_session_token);
+          setOrgs(res.discovered_organizations);
+          setPhase(res.discovered_organizations.length > 0 ? 'choose' : 'create');
+        })
+        .catch((e: unknown) => {
+          setPhase('error');
+          setError(e instanceof Error ? e.message : String(e));
+        });
+      return;
+    }
+
+    setPhase('error');
+    setError(`Unsupported token type: ${tokenType ?? 'none'}`);
+  }, [stytch, navigate]);
 
   const joinOrg = async (organizationId: string) => {
     setBusy(true);
@@ -75,6 +99,17 @@ export function Authenticate() {
         organization_id: organizationId,
         session_duration_minutes: 60,
       });
+      // If this membership came from an invite, activate the pending Proto row.
+      // Idempotent + a no-op for members that are already provisioned.
+      const tokens = stytch.session.getTokens();
+      const bearer = tokens?.session_jwt || tokens?.session_token;
+      if (bearer) {
+        try {
+          await acceptInvite(bearer);
+        } catch {
+          // best-effort; the dashboard reflects the resulting state
+        }
+      }
       navigate('/dashboard', { replace: true });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));

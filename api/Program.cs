@@ -56,6 +56,7 @@ if (supabaseOptions.IsConfigured)
 }
 builder.Services.AddScoped<TenantRepository>();
 builder.Services.AddScoped<TenantProvisioningService>();
+builder.Services.AddScoped<InvitationsService>();
 
 // --- Authentication: validate the Stytch session on [Authorize] endpoints ---
 builder.Services.AddAuthentication(StytchAuth.Scheme)

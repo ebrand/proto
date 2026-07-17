@@ -5,6 +5,7 @@ import {
   useStytchOrganization,
 } from '@stytch/react/b2b';
 import { useMe } from '../hooks/useMe';
+import { InviteForm } from '../components/InviteForm';
 
 // Authenticated landing page. Shows the DB-backed Proto tenant/user (from
 // /api/me) plus the raw Stytch session, and offers logout.
@@ -55,6 +56,13 @@ export function Dashboard() {
           </dl>
         )}
       </section>
+
+      {state === 'ready' && me?.user.tenantRole === 'admin' && (
+        <section className="card">
+          <h2>Invite a teammate</h2>
+          <InviteForm />
+        </section>
+      )}
 
       <section className="card">
         <h2>Session (Stytch)</h2>

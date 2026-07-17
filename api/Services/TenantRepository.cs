@@ -105,6 +105,107 @@ public sealed class TenantRepository(NpgsqlDataSource dataSource)
             new MeTenant(r.GetGuid(5).ToString(), r.GetString(6), r.GetString(7), r.GetString(8), r.GetString(9)));
     }
 
+    /// <summary>
+    /// Reserve a seat for an invited member: within one transaction, check the
+    /// tenant hasn't hit its tier's max_seats, then insert a pending users row
+    /// (status invited, no stytch_member_id yet). Returns the new user id.
+    /// Throws <see cref="SeatLimitException"/> when full, or
+    /// <see cref="ProvisioningException"/> when the email is already a
+    /// member/invite of the tenant.
+    /// </summary>
+    public async Task<string> CreatePendingInviteAsync(
+        Guid tenantId, string email, string tenantRole, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        try
+        {
+            int maxSeats;
+            long used;
+            await using (var check = new NpgsqlCommand(
+                """
+                select st.max_seats,
+                       (select count(*) from public.users where tenant_id = @tid)
+                from public.tenants t
+                join public.subscription_tiers st on st.id = t.subscription_tier_id
+                where t.id = @tid
+                """, conn, tx))
+            {
+                check.Parameters.AddWithValue("tid", tenantId);
+                await using var r = await check.ExecuteReaderAsync(ct);
+                if (!await r.ReadAsync(ct)) throw new ProvisioningException("tenant not found");
+                maxSeats = r.GetInt32(0);
+                used = r.GetInt64(1);
+            }
+            if (used >= maxSeats)
+            {
+                throw new SeatLimitException($"tenant is at its seat limit ({used}/{maxSeats})");
+            }
+
+            var userId = await ScalarAsync<Guid>(conn, tx, ct,
+                """
+                insert into public.users (tenant_id, email, display_name, status, tenant_role)
+                values (@tid, @email, @email, 'invited'::user_status, @role::tenant_role)
+                returning id
+                """,
+                ("tid", tenantId), ("email", email), ("role", tenantRole));
+
+            await tx.CommitAsync(ct);
+            return userId.ToString();
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            throw new ProvisioningException("that email is already a member or has a pending invite", ex);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidTextRepresentation)
+        {
+            throw new ProvisioningException($"invalid role: {tenantRole}", ex);
+        }
+    }
+
+    /// <summary>Delete a pending invite row (compensation when the Stytch invite fails).</summary>
+    public async Task DeleteUserAsync(string userId, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand("delete from public.users where id = @id", conn);
+        cmd.Parameters.AddWithValue("id", Guid.Parse(userId));
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>
+    /// Activate a pending invite: bind the now-authenticated member to the
+    /// pending users row for their email in the tenant that owns the Stytch org.
+    /// Returns the resulting user + tenant, or null if there was no pending row
+    /// (already active, or no invite).
+    /// </summary>
+    public async Task<MeResponse?> ActivateInviteAsync(
+        string stytchMemberId, string stytchOrgId, string email, string displayName, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(
+            """
+            update public.users u
+            set stytch_member_id = @mid, status = 'active'::user_status, display_name = @name
+            from public.tenants t
+            where u.tenant_id = t.id
+              and t.stytch_organization_id = @orgId
+              and lower(u.email) = lower(@email)
+              and u.stytch_member_id is null
+            returning u.id, u.email, u.display_name, u.status::text, u.tenant_role::text,
+                      t.id, t.name, t.slug, t.subscription_tier_code::text, t.subscription_status::text
+            """, conn);
+        cmd.Parameters.AddWithValue("mid", stytchMemberId);
+        cmd.Parameters.AddWithValue("orgId", stytchOrgId);
+        cmd.Parameters.AddWithValue("email", email);
+        cmd.Parameters.AddWithValue("name", string.IsNullOrWhiteSpace(displayName) ? email : displayName);
+
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        if (!await r.ReadAsync(ct)) return null;
+        return new MeResponse(
+            new MeUser(r.GetGuid(0).ToString(), r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4)),
+            new MeTenant(r.GetGuid(5).ToString(), r.GetString(6), r.GetString(7), r.GetString(8), r.GetString(9)));
+    }
+
     private static async Task<T> ScalarAsync<T>(
         NpgsqlConnection conn, NpgsqlTransaction tx, CancellationToken ct,
         string sql, params (string Name, object Value)[] parameters)
@@ -129,3 +230,6 @@ public sealed class TenantRepository(NpgsqlDataSource dataSource)
 /// <summary>Raised when tenant provisioning fails at the data layer.</summary>
 public sealed class ProvisioningException(string message, Exception? inner = null)
     : Exception(message, inner);
+
+/// <summary>Raised when an invite would exceed the tenant's tier seat limit.</summary>
+public sealed class SeatLimitException(string message) : Exception(message);

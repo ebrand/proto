@@ -82,3 +82,38 @@ export async function getMe(sessionToken: string): Promise<Me | null> {
 
   return (await res.json()) as Me;
 }
+
+async function bearerFetch(path: string, sessionToken: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: { ...init?.headers, Authorization: `Bearer ${sessionToken}` },
+  });
+}
+
+async function asError(res: Response, prefix: string): Promise<Error> {
+  let detail = res.statusText;
+  try {
+    const body = (await res.json()) as { detail?: string; error?: string };
+    detail = body.detail ?? body.error ?? detail;
+  } catch {
+    // keep statusText
+  }
+  return new Error(`${prefix} (${res.status}): ${detail}`);
+}
+
+/** Admin: invite an email into the current tenant. */
+export async function sendInvite(sessionToken: string, email: string, tenantRole: string): Promise<void> {
+  const res = await bearerFetch('/api/invitations', sessionToken, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, tenantRole }),
+  });
+  if (!res.ok) throw await asError(res, 'Invite failed');
+}
+
+/** Invitee: activate the pending users row after authenticating the magic link. */
+export async function acceptInvite(sessionToken: string): Promise<Me> {
+  const res = await bearerFetch('/api/invitations/accept', sessionToken, { method: 'POST' });
+  if (!res.ok) throw await asError(res, 'Accept failed');
+  return (await res.json()) as Me;
+}

@@ -27,8 +27,12 @@ public sealed class TenantProvisioningService(
             OrganizationName = request.OrganizationName,
             OrganizationSlug = slug,
             SessionDurationMinutes = 60,
+            // No auto-join: JIT off. But admins must be able to invite anyone,
+            // so email invites are allowed (an invite is an explicit admin
+            // action, not open self-service like JIT).
             EmailJITProvisioning = "NOT_ALLOWED",
             SSOJITProvisioning = "NOT_ALLOWED",
+            EmailInvites = "ALL_ALLOWED",
             EmailAllowedDomains = [],
         };
 

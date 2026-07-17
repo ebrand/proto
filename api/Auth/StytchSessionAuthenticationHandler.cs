@@ -57,6 +57,7 @@ public sealed class StytchSessionAuthenticationHandler(
                 new Claim(StytchAuth.MemberIdClaim, result.Member.MemberId),
                 new Claim(StytchAuth.OrganizationIdClaim, result.Organization.OrganizationId),
                 new Claim(ClaimTypes.Email, result.Member.EmailAddress ?? string.Empty),
+                new Claim(ClaimTypes.Name, result.Member.Name ?? string.Empty),
             };
             var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, StytchAuth.Scheme));
             return AuthenticateResult.Success(new AuthenticationTicket(principal, StytchAuth.Scheme));
