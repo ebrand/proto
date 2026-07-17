@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authentication;
 using Npgsql;
+using Proto.Api.Auth;
 using Proto.Api.Options;
 using Proto.Api.Services;
 using Stytch.net.Clients;
@@ -55,6 +57,11 @@ if (supabaseOptions.IsConfigured)
 builder.Services.AddScoped<TenantRepository>();
 builder.Services.AddScoped<TenantProvisioningService>();
 
+// --- Authentication: validate the Stytch session on [Authorize] endpoints ---
+builder.Services.AddAuthentication(StytchAuth.Scheme)
+    .AddScheme<AuthenticationSchemeOptions, StytchSessionAuthenticationHandler>(StytchAuth.Scheme, null);
+builder.Services.AddAuthorization();
+
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
@@ -67,6 +74,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors(WebCorsPolicy);
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

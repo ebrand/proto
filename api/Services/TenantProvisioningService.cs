@@ -18,10 +18,14 @@ public sealed class TenantProvisioningService(
     public async Task<SessionResponse> SignupAsync(SignupRequest request, CancellationToken ct)
     {
         // 1. Create the Stytch org from the IST. Name is the user's choice;
-        //    JIT is locked off so no one can auto-join this tenant (see design).
+        //    slug is derived from that name (NOT set => Stytch derives it from
+        //    the login email, which is not what anyone expects). JIT is locked
+        //    off so no one can auto-join this tenant (see design).
+        var slug = Slugify(request.OrganizationName, fallback: "tenant");
         var createReq = new B2BDiscoveryOrganizationsCreateRequest(request.IntermediateSessionToken)
         {
             OrganizationName = request.OrganizationName,
+            OrganizationSlug = slug,
             SessionDurationMinutes = 60,
             EmailJITProvisioning = "NOT_ALLOWED",
             SSOJITProvisioning = "NOT_ALLOWED",
@@ -31,18 +35,18 @@ public sealed class TenantProvisioningService(
         var created = await stytch.Discovery.Organizations.Create(createReq);
         var org = created.Organization;
         var member = created.Member;
-        logger.LogInformation("Stytch org created: {OrgId}", org.OrganizationId);
+        logger.LogInformation("Stytch org created: {OrgId} slug={Slug}", org.OrganizationId, org.OrganizationSlug);
 
         // display_name has a length>=1 DB check; Google usually supplies a name,
         // but fall back to the email if it is blank.
         var memberName = string.IsNullOrWhiteSpace(member.Name) ? member.EmailAddress : member.Name;
-        var slug = Slugify(org.OrganizationSlug, fallback: org.OrganizationId);
 
-        // 2. Persist tenant + admin user in one transaction.
+        // 2. Persist tenant + admin user in one transaction. Use the slug Stytch
+        //    actually stored (equals what we sent on success).
         var (tenantId, userId) = await tenants.ProvisionTenantAsync(
             tierCode: request.TierCode,
             orgName: org.OrganizationName,
-            orgSlug: slug,
+            orgSlug: Slugify(org.OrganizationSlug, fallback: slug),
             stytchOrgId: org.OrganizationId,
             memberEmail: member.EmailAddress,
             memberName: memberName,

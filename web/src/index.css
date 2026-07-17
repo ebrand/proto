@@ -70,6 +70,67 @@ body {
   line-height: 1.8;
 }
 
+.error {
+  color: #b91c1c;
+  margin: 0.75rem 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .error {
+    color: #f87171;
+  }
+}
+
+.field {
+  margin: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.field label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.field input,
+.field select {
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.auth-card form button[type='submit'] {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.org-list {
+  list-style: none;
+  margin: 1rem 0 0.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.org-list button {
+  width: 100%;
+  text-align: left;
+}
+
+button.link {
+  border: none;
+  background: none;
+  color: var(--muted);
+  padding: 0.5rem 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .page {
   max-width: 720px;
   margin: 0 auto;

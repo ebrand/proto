@@ -1,4 +1,5 @@
 using Npgsql;
+using Proto.Api.Models;
 
 namespace Proto.Api.Services;
 
@@ -76,6 +77,32 @@ public sealed class TenantRepository(NpgsqlDataSource dataSource)
             // e.g. a tierCode that isn't a valid subscription_tier_code enum value.
             throw new ProvisioningException($"unknown subscription tier: {tierCode}", ex);
         }
+    }
+
+    /// <summary>
+    /// Resolve a Stytch member id to the Proto user + tenant it maps to (via the
+    /// stytch_member_id sync key). Returns null when the session is valid but no
+    /// Proto rows exist yet (e.g. an org that was never provisioned).
+    /// </summary>
+    public async Task<MeResponse?> FindMemberContextAsync(string stytchMemberId, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(
+            """
+            select u.id, u.email, u.display_name, u.status::text, u.tenant_role::text,
+                   t.id, t.name, t.slug, t.subscription_tier_code::text, t.subscription_status::text
+            from public.users u
+            join public.tenants t on t.id = u.tenant_id
+            where u.stytch_member_id = @mid
+            """, conn);
+        cmd.Parameters.AddWithValue("mid", stytchMemberId);
+
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        if (!await r.ReadAsync(ct)) return null;
+
+        return new MeResponse(
+            new MeUser(r.GetGuid(0).ToString(), r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4)),
+            new MeTenant(r.GetGuid(5).ToString(), r.GetString(6), r.GetString(7), r.GetString(8), r.GetString(9)));
     }
 
     private static async Task<T> ScalarAsync<T>(

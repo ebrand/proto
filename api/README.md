@@ -62,10 +62,13 @@ in `../auth/supabase.json`.
 | POST | `/api/onboarding/signup` | implemented (Flow 2) |
 | POST | `/api/invitations` | stub (501) |
 | GET | `/api/invitations/callback` | stub (501) |
-| GET | `/api/me` | stub (501) |
+| GET | `/api/me` | implemented |
 
-Signup depends on the `subscription_tiers` catalog being seeded (migration
-`20260717000004_seed_subscription_tiers`).
+`/api/me` requires `Authorization: Bearer <stytch session token or jwt>`; the
+`Stytch` auth scheme validates it via Stytch on each request and maps the
+member id to the Proto user + tenant. `404 not_provisioned` = valid session but
+no Proto rows yet. Signup depends on the `subscription_tiers` catalog being
+seeded (migration `20260717000004_seed_subscription_tiers`).
 
 ## Packages
 
