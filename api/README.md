@@ -5,8 +5,10 @@ Stytch and Supabase. It is the only component that holds the Stytch **secret**
 key and the Supabase **service role**; the browser never touches Supabase
 directly. Design: Confluence → Proto → *Tenant Provisioning & Onboarding (Design)*.
 
-> Status: **scaffold**. Wiring, config, CORS, and the endpoint surface exist and
-> build/run. The onboarding/invite/me handlers are stubs returning `501`.
+> Status: **early**. `POST /api/onboarding/signup` (Flow 2) is implemented —
+> creates the Stytch org from an intermediate session token, then writes the
+> tenant + admin user atomically via Npgsql. The invite/me handlers are still
+> stubs returning `501`. All data logic is in C# (no PL/pgSQL functions).
 
 ## Requirements
 
@@ -38,26 +40,34 @@ commit real secrets. Supply them via user-secrets in development:
 dotnet user-secrets init
 dotnet user-secrets set "Stytch:ProjectId"     "project-test-…"
 dotnet user-secrets set "Stytch:ProjectSecret" "secret-test-…"
-dotnet user-secrets set "Supabase:ConnectionString" "Host=…;Database=postgres;Username=…;Password=…"
+dotnet user-secrets set "Supabase:ConnectionString" "Host=aws-0-<region>.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.<ref>;Password=…;SSL Mode=Require;Trust Server Certificate=true"
 ```
 
 In deployment, use environment variables (e.g. `Stytch__ProjectSecret`).
 
+> **Use the Supabase _Session pooler_ connection string**, not the direct one.
+> The direct host `db.<ref>.supabase.co` is IPv6-only and won't resolve on
+> IPv4 networks; the pooler host `aws-0-<region>.pooler.supabase.com` (user
+> `postgres.<ref>`) is IPv4-compatible.
+
 The Stytch values are the same project as `../web` (source of truth:
-`../auth/stytch.json`). The Supabase connection string points at the project
-referenced in `../.mcp.json`.
+`../auth/stytch.json`). The Supabase connection string is the `session-pooler-cnn-string`
+in `../auth/supabase.json`.
 
 ## Endpoints (current)
 
 | Method | Path | Status |
 | --- | --- | --- |
 | GET | `/api/health` | implemented |
-| POST | `/api/onboarding/signup` | stub (501) |
+| POST | `/api/onboarding/signup` | implemented (Flow 2) |
 | POST | `/api/invitations` | stub (501) |
 | GET | `/api/invitations/callback` | stub (501) |
 | GET | `/api/me` | stub (501) |
 
+Signup depends on the `subscription_tiers` catalog being seeded (migration
+`20260717000004_seed_subscription_tiers`).
+
 ## Packages
 
 - `Stytch.net` — official Stytch B2B backend SDK (depends on Newtonsoft.Json).
-- `Npgsql` — Postgres access to Supabase (service-role connection).
+- `Npgsql` — Postgres access to Supabase via the session pooler.

@@ -1,4 +1,6 @@
+using Npgsql;
 using Proto.Api.Options;
+using Proto.Api.Services;
 using Stytch.net.Clients;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -39,6 +41,19 @@ builder.Services.AddCors(options =>
         .AllowAnyHeader()
         .AllowAnyMethod());
 });
+
+// --- Data access + provisioning -------------------------------------------
+// Npgsql against the Supabase session pooler. Registered only when configured
+// so the app still starts (and the 503 guard works) without a connection
+// string. The data source is a singleton (owns the connection pool).
+var supabaseOptions = builder.Configuration
+    .GetSection(SupabaseOptions.SectionName).Get<SupabaseOptions>() ?? new SupabaseOptions();
+if (supabaseOptions.IsConfigured)
+{
+    builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(supabaseOptions.ConnectionString));
+}
+builder.Services.AddScoped<TenantRepository>();
+builder.Services.AddScoped<TenantProvisioningService>();
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
