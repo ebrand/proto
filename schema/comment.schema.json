@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "proto/comment.schema.json",
+  "title": "Comment",
+  "type": "object",
+  "required": ["id", "prototypeId", "tenantId", "authorId", "body", "status", "createdAt"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "prototypeId": { "type": "string", "format": "uuid" },
+    "tenantId": { "type": "string", "format": "uuid" },
+    "pageId": { "type": ["string", "null"], "format": "uuid", "description": "Optional page anchor" },
+    "parentCommentId": { "type": ["string", "null"], "format": "uuid", "description": "Threading" },
+    "authorId": { "type": "string", "format": "uuid" },
+    "authorRole": {
+      "type": "string",
+      "enum": ["owner", "reviewer", "stakeholder", "member"],
+      "description": "Denormalized author role at post time, so a stakeholder is identifiable in the comment section per the spec"
+    },
+    "body": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "enum": ["open", "resolved"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}

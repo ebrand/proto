@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "proto/approval-request.schema.json",
+  "title": "ApprovalRequest",
+  "type": "object",
+  "required": ["id", "prototypeId", "tenantId", "requestedById", "status", "decisions", "createdAt"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "prototypeId": { "type": "string", "format": "uuid" },
+    "tenantId": { "type": "string", "format": "uuid" },
+    "requestedById": { "type": "string", "format": "uuid" },
+    "status": { "type": "string", "enum": ["pending", "approved", "rejected", "cancelled"] },
+    "decisions": {
+      "type": "array",
+      "description": "One entry per stakeholder whose sign-off is required",
+      "items": {
+        "type": "object",
+        "required": ["approverId", "decision"],
+        "additionalProperties": false,
+        "properties": {
+          "approverId": { "type": "string", "format": "uuid" },
+          "decision": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+          "comment": { "type": ["string", "null"] },
+          "decidedAt": { "type": ["string", "null"], "format": "date-time" }
+        }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "resolvedAt": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

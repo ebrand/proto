@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "proto/prototype.schema.json",
+  "title": "Prototype",
+  "type": "object",
+  "required": ["id", "tenantId", "name", "type", "status", "ownerId", "createdAt"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "tenantId": { "type": "string", "format": "uuid" },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "type": { "type": "string", "enum": ["functional", "illustrative"] },
+    "status": { "type": "string", "enum": ["draft", "in_review", "changes_requested", "approved", "archived"] },
+    "ownerId": { "type": "string", "format": "uuid" },
+    "participants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["userId", "role"],
+        "additionalProperties": false,
+        "properties": {
+          "userId": { "type": "string", "format": "uuid" },
+          "role": { "type": "string", "enum": ["reviewer", "stakeholder"] },
+          "addedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "functional": {
+      "type": "object",
+      "description": "Required when type = functional",
+      "required": ["githubRepoUrl"],
+      "additionalProperties": false,
+      "properties": {
+        "githubRepoUrl": { "type": "string", "format": "uri" },
+        "branch": { "type": "string" },
+        "lastDeployedCommit": { "type": ["string", "null"] }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "functional" } } },
+      "then": { "required": ["functional"] }
+    }
+  ]
+}

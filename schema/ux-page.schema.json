@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "proto/ux-page.schema.json",
+  "title": "UXPage",
+  "type": "object",
+  "required": ["id", "prototypeId", "tenantId", "name", "order", "kind"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "prototypeId": { "type": "string", "format": "uuid" },
+    "tenantId": { "type": "string", "format": "uuid" },
+    "name": { "type": "string", "minLength": 1 },
+    "order": { "type": "integer", "minimum": 0 },
+    "isEntryPage": { "type": "boolean", "default": false },
+    "kind": { "type": "string", "enum": ["illustrative", "functional"] },
+    "image": {
+      "type": "object",
+      "description": "Illustrative pages: the mockup image",
+      "required": ["mediaId", "url", "width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "mediaId": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "hotspots": {
+      "type": "array",
+      "description": "Illustrative pages: clickable areas -> destination",
+      "items": {
+        "type": "object",
+        "required": ["id", "shape", "target"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "shape": { "type": "string", "enum": ["rect", "polygon"] },
+          "rect": {
+            "type": "object",
+            "required": ["x", "y", "width", "height"],
+            "additionalProperties": false,
+            "properties": {
+              "x": { "type": "number", "minimum": 0 },
+              "y": { "type": "number", "minimum": 0 },
+              "width": { "type": "number", "minimum": 0 },
+              "height": { "type": "number", "minimum": 0 }
+            }
+          },
+          "points": {
+            "type": "array",
+            "description": "polygon vertices as [x,y] pairs",
+            "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
+          },
+          "target": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "targetPageId": { "type": ["string", "null"], "format": "uuid" },
+              "externalUrl": { "type": ["string", "null"], "format": "uri" }
+            }
+          }
+        }
+      }
+    },
+    "route": {
+      "type": ["string", "null"],
+      "description": "Functional pages: route/path in the running app"
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}

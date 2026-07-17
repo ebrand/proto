@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "proto/subscription-tier.schema.json",
+  "title": "SubscriptionTier",
+  "type": "object",
+  "required": ["id", "code", "name", "maxSeats", "isActive"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "code": { "type": "string", "enum": ["free", "pro", "enterprise"] },
+    "name": { "type": "string" },
+    "maxSeats": { "type": "integer", "minimum": 1 },
+    "maxPrototypes": { "type": ["integer", "null"], "minimum": 1, "description": "null = unlimited" },
+    "features": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "monthlyPriceCents": { "type": "integer", "minimum": 0 },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "isActive": { "type": "boolean" }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "proto/tenant.schema.json",
+  "title": "Tenant",
+  "type": "object",
+  "required": ["id", "name", "slug", "status", "subscription", "createdAt"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "name": { "type": "string", "minLength": 1 },
+    "slug": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "status": { "type": "string", "enum": ["active", "suspended", "cancelled"] },
+    "subscription": {
+      "type": "object",
+      "required": ["tierId", "tierCode", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "tierId": { "type": "string", "format": "uuid" },
+        "tierCode": { "type": "string", "enum": ["free", "pro", "enterprise"] },
+        "status": { "type": "string", "enum": ["trialing", "active", "past_due", "cancelled"] },
+        "currentPeriodStart": { "type": "string", "format": "date-time" },
+        "currentPeriodEnd": { "type": "string", "format": "date-time" }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}
