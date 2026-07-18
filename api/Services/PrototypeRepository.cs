@@ -38,15 +38,15 @@ public sealed class PrototypeRepository(NpgsqlDataSource dataSource)
 
     public async Task<string> CreateAsync(
         Guid tenantId, Guid ownerId, string name, string type,
-        string? description, string? githubRepoUrl, string? githubBranch, CancellationToken ct)
+        string? description, string? githubRepoUrl, string? githubBranch, string? language, CancellationToken ct)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var cmd = new NpgsqlCommand(
             """
             insert into public.prototypes
-              (tenant_id, name, description, type, owner_id, github_repo_url, github_branch)
+              (tenant_id, name, description, type, owner_id, github_repo_url, github_branch, language)
             values
-              (@tid, @name, @desc, @type::prototype_type, @owner, @repo, @branch)
+              (@tid, @name, @desc, @type::prototype_type, @owner, @repo, @branch, @lang)
             returning id
             """, conn);
         cmd.Parameters.AddWithValue("tid", tenantId);
@@ -56,6 +56,7 @@ public sealed class PrototypeRepository(NpgsqlDataSource dataSource)
         cmd.Parameters.AddWithValue("owner", ownerId);
         cmd.Parameters.AddWithValue("repo", (object?)githubRepoUrl ?? DBNull.Value);
         cmd.Parameters.AddWithValue("branch", (object?)githubBranch ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("lang", (object?)language ?? DBNull.Value);
 
         var id = (Guid)(await cmd.ExecuteScalarAsync(ct))!;
         return id.ToString();

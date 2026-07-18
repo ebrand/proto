@@ -8,7 +8,21 @@ public sealed record CreatePrototypeRequest(
     string Type,              // "functional" | "illustrative"
     string? Description,
     string? GithubRepoUrl,    // required when Type = functional
-    string? GithubBranch);
+    string? GithubBranch,
+    string? Language);        // detected during the define-a-prototype workflow
+
+public sealed record RepoInspectRequest(string RepoUrl);
+
+/// <summary>Result of inspecting a GitHub repo for the define-a-prototype workflow.</summary>
+public sealed record RepoInspection(
+    bool Accessible,
+    string? Owner,
+    string? RepoName,
+    string? DefaultBranch,
+    string? DetectedLanguage,
+    bool Supported,
+    bool IsPrivate,
+    string? Message);
 
 public sealed record PrototypeSummary(
     string Id,

@@ -18,6 +18,18 @@ public sealed class PrototypesController(
 {
     private static readonly string[] Types = ["functional", "illustrative"];
 
+    /// <summary>
+    /// Inspect a GitHub repo for the define-a-prototype workflow: detect the
+    /// language and whether it's supported. No tenant data touched.
+    /// </summary>
+    [HttpPost("inspect")]
+    public async Task<IActionResult> Inspect([FromBody] RepoInspectRequest request, CancellationToken ct)
+    {
+        var github = HttpContext.RequestServices.GetRequiredService<GitHubClient>();
+        var result = await github.InspectAsync(request.RepoUrl ?? string.Empty, ct);
+        return Ok(result);
+    }
+
     /// <summary>List the caller's tenant's prototypes.</summary>
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
@@ -62,6 +74,7 @@ public sealed class PrototypesController(
             string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
             repoUrl,
             string.IsNullOrWhiteSpace(request.GithubBranch) ? null : request.GithubBranch.Trim(),
+            type == "functional" && !string.IsNullOrWhiteSpace(request.Language) ? request.Language.Trim() : null,
             ct);
 
         logger.LogInformation("Created prototype {Id} in tenant {TenantId}", id, me.Tenant.Id);

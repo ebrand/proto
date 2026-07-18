@@ -133,6 +133,29 @@ export interface CreatePrototypeInput {
   description?: string;
   githubRepoUrl?: string;
   githubBranch?: string;
+  language?: string;
+}
+
+export interface RepoInspection {
+  accessible: boolean;
+  owner: string | null;
+  repoName: string | null;
+  defaultBranch: string | null;
+  detectedLanguage: string | null;
+  supported: boolean;
+  isPrivate: boolean;
+  message: string | null;
+}
+
+/** Inspect a GitHub repo: detect language + whether it's supported. */
+export async function inspectRepo(sessionToken: string, repoUrl: string): Promise<RepoInspection> {
+  const res = await bearerFetch('/api/prototypes/inspect', sessionToken, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repoUrl }),
+  });
+  if (!res.ok) throw await asError(res, 'Inspecting repo failed');
+  return (await res.json()) as RepoInspection;
 }
 
 /** List the caller's tenant's prototypes. */
