@@ -15,6 +15,7 @@ namespace Proto.Api.Controllers;
 public sealed class InvitationsController(
     IOptions<StytchOptions> stytch,
     IOptions<SupabaseOptions> supabase,
+    IOptions<ResendOptions> resend,
     ILogger<InvitationsController> logger) : ControllerBase
 {
     private static readonly string[] Roles = ["admin", "member"];
@@ -29,6 +30,10 @@ public sealed class InvitationsController(
         if (!stytch.Value.IsConfigured || !supabase.Value.IsConfigured)
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "not_configured" });
+        }
+        if (!resend.Value.IsConfigured)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "email_not_configured" });
         }
 
         var email = request.Email?.Trim().ToLowerInvariant() ?? string.Empty;
@@ -45,8 +50,7 @@ public sealed class InvitationsController(
 
         var memberId = User.FindFirstValue(StytchAuth.MemberIdClaim);
         var orgId = User.FindFirstValue(StytchAuth.OrganizationIdClaim);
-        var sessionToken = BearerToken();
-        if (string.IsNullOrEmpty(memberId) || string.IsNullOrEmpty(orgId) || sessionToken.Length == 0)
+        if (string.IsNullOrEmpty(memberId) || string.IsNullOrEmpty(orgId))
         {
             return Unauthorized();
         }
@@ -65,7 +69,7 @@ public sealed class InvitationsController(
         var invites = HttpContext.RequestServices.GetRequiredService<InvitationsService>();
         try
         {
-            await invites.InviteAsync(Guid.Parse(admin.Tenant.Id), orgId, email, role, memberId, sessionToken, ct);
+            await invites.InviteAsync(Guid.Parse(admin.Tenant.Id), orgId, admin.Tenant.Name, email, role, ct);
             return Ok(new { email, status = "invited" });
         }
         catch (SeatLimitException ex)
@@ -75,6 +79,12 @@ public sealed class InvitationsController(
         catch (ProvisioningException ex)
         {
             return Conflict(new { error = "conflict", detail = ex.Message });
+        }
+        catch (EmailException ex)
+        {
+            logger.LogError(ex, "Invite email failed to send");
+            return StatusCode(StatusCodes.Status502BadGateway,
+                new { error = "email_failed", detail = ex.Message });
         }
         catch (Stytch.net.Exceptions.StytchApiException ex)
         {
@@ -116,13 +126,5 @@ public sealed class InvitationsController(
             return NotFound(new { error = "not_provisioned" });
         }
         return Ok(me);
-    }
-
-    private string BearerToken()
-    {
-        var header = Request.Headers.Authorization.ToString();
-        return header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-            ? header["Bearer ".Length..].Trim()
-            : string.Empty;
     }
 }

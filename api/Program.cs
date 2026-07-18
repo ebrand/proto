@@ -23,6 +23,8 @@ builder.Services.Configure<StytchOptions>(
     builder.Configuration.GetSection(StytchOptions.SectionName));
 builder.Services.Configure<SupabaseOptions>(
     builder.Configuration.GetSection(SupabaseOptions.SectionName));
+builder.Services.Configure<ResendOptions>(
+    builder.Configuration.GetSection(ResendOptions.SectionName));
 
 // --- Stytch B2B backend client ---------------------------------------------
 // Registered lazily: the singleton is only constructed the first time a handler
@@ -68,6 +70,7 @@ if (supabaseOptions.IsConfigured)
 builder.Services.AddScoped<TenantRepository>();
 builder.Services.AddScoped<TenantProvisioningService>();
 builder.Services.AddScoped<InvitationsService>();
+builder.Services.AddHttpClient<ResendClient>();
 
 // --- Authentication: validate the Stytch session on [Authorize] endpoints ---
 builder.Services.AddAuthentication(StytchAuth.Scheme)
