@@ -8,7 +8,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="$SCRIPT_DIR/../auth/railway-api-envvars.json"
+ENV_FILE="$SCRIPT_DIR/../auth/local-api-envvars.json"
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "error: jq is required but not installed (brew install jq)" >&2
