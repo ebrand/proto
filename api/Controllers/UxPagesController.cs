@@ -54,6 +54,52 @@ public sealed class UxPagesController(
         return Created($"/api/prototypes/{protoId}/pages/{id}", new { id });
     }
 
+    /// <summary>Rename a page.</summary>
+    [HttpPut("{pageId}")]
+    public async Task<IActionResult> Rename(
+        string prototypeId, string pageId,
+        [FromBody] RenamePageRequest request, CancellationToken ct)
+    {
+        if (!Guid.TryParse(pageId, out var pgId)) return NotFound();
+        var name = request.Name?.Trim() ?? string.Empty;
+        if (name.Length == 0) return BadRequest(new { error = "name_required" });
+
+        var (tenantId, protoId, guard) = await ResolveScopeAsync(prototypeId, ct);
+        if (guard is not null) return guard;
+
+        var pages = HttpContext.RequestServices.GetRequiredService<UxPageRepository>();
+        var ok = await pages.RenameAsync(tenantId, protoId, pgId, name, ct);
+        return ok ? NoContent() : NotFound(new { error = "page_not_found" });
+    }
+
+    /// <summary>Delete a page (hotspots cascade; image object is cleaned up).</summary>
+    [HttpDelete("{pageId}")]
+    public async Task<IActionResult> Delete(string prototypeId, string pageId, CancellationToken ct)
+    {
+        if (!Guid.TryParse(pageId, out var pgId)) return NotFound();
+
+        var (tenantId, protoId, guard) = await ResolveScopeAsync(prototypeId, ct);
+        if (guard is not null) return guard;
+
+        var pages = HttpContext.RequestServices.GetRequiredService<UxPageRepository>();
+        var (deleted, imagePath) = await pages.DeleteAsync(tenantId, protoId, pgId, ct);
+        if (!deleted) return NotFound(new { error = "page_not_found" });
+
+        // Best-effort storage cleanup — the row (and its hotspots) are already gone.
+        if (imagePath is not null)
+        {
+            var storage = HttpContext.RequestServices.GetRequiredService<SupabaseStorageClient>();
+            if (storage.IsConfigured)
+            {
+                var ok = await storage.DeleteAsync(imagePath, ct);
+                if (!ok) logger.LogWarning("Orphaned storage object {Path}", imagePath);
+            }
+        }
+
+        logger.LogInformation("Deleted page {PageId} from prototype {ProtoId}", pgId, protoId);
+        return NoContent();
+    }
+
     /// <summary>Persist a page's position on the flow-map canvas (drag-to-move).</summary>
     [HttpPut("{pageId}/position")]
     public async Task<IActionResult> UpdatePosition(

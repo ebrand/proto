@@ -26,3 +26,5 @@ public sealed record UxPageSummary(
 // The (x, y) a page occupies on the prototype's flow-map canvas. Persisted when
 // the user drags a frame; null until then (client auto-lays-out).
 public sealed record UpdatePagePositionRequest(double X, double Y);
+
+public sealed record RenamePageRequest(string Name);

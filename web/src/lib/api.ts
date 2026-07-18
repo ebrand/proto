@@ -378,6 +378,33 @@ export async function deleteHotspot(
   if (!res.ok) throw await asError(res, 'Deleting link failed');
 }
 
+/** Rename a page. */
+export async function renamePage(
+  sessionToken: string,
+  prototypeId: string,
+  pageId: string,
+  name: string,
+): Promise<void> {
+  const res = await bearerFetch(`/api/prototypes/${prototypeId}/pages/${pageId}`, sessionToken, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw await asError(res, 'Renaming page failed');
+}
+
+/** Delete a page (its hotspots and image are cleaned up server-side). */
+export async function deletePage(
+  sessionToken: string,
+  prototypeId: string,
+  pageId: string,
+): Promise<void> {
+  const res = await bearerFetch(`/api/prototypes/${prototypeId}/pages/${pageId}`, sessionToken, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw await asError(res, 'Deleting page failed');
+}
+
 /** Persist a page's position on the flow-map canvas (drag-to-move). */
 export async function updatePagePosition(
   sessionToken: string,

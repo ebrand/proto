@@ -6,10 +6,12 @@ import {
   createHotspot,
   createPage,
   deleteHotspot,
+  deletePage,
   deletePageImage,
   getPrototype,
   listHotspots,
   listPages,
+  renamePage,
   updatePagePosition,
   uploadPageImage,
   type Hotspot,
@@ -80,6 +82,12 @@ export function PrototypeDetail() {
 
   // Which page's hotspot regions are being edited (modal).
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
+
+  // Page rename/delete management.
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [pageBusyId, setPageBusyId] = useState<string | null>(null);
+  const [pageMgmtError, setPageMgmtError] = useState('');
 
   // Canvas positions, keyed by page id. Local state so dragging is smooth;
   // seeded from the server's canvasX/Y (or an auto-grid slot when unset).
@@ -279,6 +287,48 @@ export function PrototypeDetail() {
     }
   };
 
+  const startRename = (pg: UxPage) => {
+    setRenamingId(pg.id);
+    setRenameValue(pg.name);
+    setPageMgmtError('');
+  };
+
+  const saveRename = async (pageId: string) => {
+    const name = renameValue.trim();
+    if (!name) {
+      setPageMgmtError('Name is required.');
+      return;
+    }
+    setPageBusyId(pageId);
+    setPageMgmtError('');
+    try {
+      await renamePage(bearer(), id, pageId, name);
+      setRenamingId(null);
+      await load();
+    } catch (e: unknown) {
+      setPageMgmtError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPageBusyId(null);
+    }
+  };
+
+  const doDeletePage = async (pg: UxPage) => {
+    if (!window.confirm(`Delete "${pg.name}"? This also removes its links and image. This can't be undone.`)) {
+      return;
+    }
+    setPageBusyId(pg.id);
+    setPageMgmtError('');
+    try {
+      await deletePage(bearer(), id, pg.id);
+      if (editingPageId === pg.id) setEditingPageId(null);
+      await load();
+    } catch (e: unknown) {
+      setPageMgmtError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPageBusyId(null);
+    }
+  };
+
   const illustrativePages = pages.filter((p) => p.kind === 'illustrative');
 
   // Size the scrollable surface to contain every frame, with room to drag out.
@@ -422,6 +472,65 @@ export function PrototypeDetail() {
                 {busy ? 'Adding…' : 'Add page'}
               </button>
             </form>
+          </section>
+
+          <section className="card">
+            <h2>Pages</h2>
+            {pages.length === 0 ? (
+              <p className="muted">No pages yet — add one above.</p>
+            ) : (
+              <>
+                {pageMgmtError && <p className="error">{pageMgmtError}</p>}
+                <ul className="proto-list page-list">
+                  {pages.map((pg) => {
+                    const busy = pageBusyId === pg.id;
+                    return (
+                      <li key={pg.id}>
+                        {renamingId === pg.id ? (
+                          <div className="page-rename">
+                            <input
+                              value={renameValue}
+                              onChange={(e) => setRenameValue(e.target.value)}
+                              disabled={busy}
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') void saveRename(pg.id);
+                                if (e.key === 'Escape') setRenamingId(null);
+                              }}
+                            />
+                            <button type="button" onClick={() => void saveRename(pg.id)} disabled={busy}>
+                              {busy ? 'Saving…' : 'Save'}
+                            </button>
+                            <button type="button" className="link" onClick={() => setRenamingId(null)} disabled={busy}>
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <span>
+                              <strong>{pg.name}</strong>
+                              <span className="muted">
+                                {' '}· {pg.kind}
+                                {pg.isEntryPage ? ' · entry' : ''}
+                                {pg.route ? ` · ${pg.route}` : ''}
+                              </span>
+                            </span>
+                            <span className="page-actions">
+                              <button type="button" className="link" onClick={() => startRename(pg)} disabled={busy}>
+                                Rename
+                              </button>
+                              <button type="button" className="link danger" onClick={() => void doDeletePage(pg)} disabled={busy}>
+                                Delete
+                              </button>
+                            </span>
+                          </>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
           </section>
 
           <section className="card">

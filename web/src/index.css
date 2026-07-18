@@ -428,6 +428,46 @@ label.checkbox input {
   margin: 0;
 }
 
+.page-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.page-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex: none;
+}
+
+.page-rename {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.page-rename input {
+  flex: 1;
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+button.link.danger {
+  color: #b91c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  button.link.danger {
+    color: #f87171;
+  }
+}
+
 .link-list li {
   display: flex;
   align-items: center;

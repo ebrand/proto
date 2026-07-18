@@ -69,6 +69,57 @@ public sealed class UxPageRepository(NpgsqlDataSource dataSource)
         return id.ToString();
     }
 
+    /// <summary>Rename a page. Scoped by tenant + prototype. False if absent.</summary>
+    public async Task<bool> RenameAsync(
+        Guid tenantId, Guid prototypeId, Guid pageId, string name, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(
+            """
+            update public.ux_pages set name = @name, updated_at = now()
+            where id = @id and tenant_id = @tid and prototype_id = @pid
+            """, conn);
+        cmd.Parameters.AddWithValue("id", pageId);
+        cmd.Parameters.AddWithValue("tid", tenantId);
+        cmd.Parameters.AddWithValue("pid", prototypeId);
+        cmd.Parameters.AddWithValue("name", name);
+        return await cmd.ExecuteNonQueryAsync(ct) > 0;
+    }
+
+    /// <summary>
+    /// Delete a page (its hotspots cascade; incoming links null out at the DB).
+    /// Returns whether a row was deleted and the old image path (if any) so the
+    /// caller can clean up the storage object. The `old` CTE reads the path
+    /// before `del` removes the row.
+    /// </summary>
+    public async Task<(bool Deleted, string? ImagePath)> DeleteAsync(
+        Guid tenantId, Guid prototypeId, Guid pageId, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(
+            """
+            with old as (
+                select image_media_id as path from public.ux_pages
+                where id = @id and tenant_id = @tid and prototype_id = @pid
+            ),
+            del as (
+                delete from public.ux_pages
+                where id = @id and tenant_id = @tid and prototype_id = @pid
+                returning 1
+            )
+            select (select count(*) from del)::int as deleted, (select path from old) as path
+            """, conn);
+        cmd.Parameters.AddWithValue("id", pageId);
+        cmd.Parameters.AddWithValue("tid", tenantId);
+        cmd.Parameters.AddWithValue("pid", prototypeId);
+
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        if (!await r.ReadAsync(ct)) return (false, null);
+        var deleted = r.GetInt32(0) > 0;
+        var path = r.IsDBNull(1) ? null : r.GetString(1);
+        return (deleted, path);
+    }
+
     /// <summary>True if the page exists in the given tenant + prototype.</summary>
     public async Task<bool> PageBelongsAsync(
         Guid tenantId, Guid prototypeId, Guid pageId, CancellationToken ct)
