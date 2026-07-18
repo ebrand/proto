@@ -20,4 +20,22 @@ public sealed class SupabaseOptions
     public string ConnectionString { get; set; } = string.Empty;
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(ConnectionString);
+
+    // --- Storage (page-image uploads) --------------------------------------
+    // Project URL (https://&lt;ref&gt;.supabase.co) and a Supabase secret key
+    // (sb_secret_...) so the API can mint signed upload URLs and delete objects.
+    // The key is a SECRET; supply via env vars. Storage calls send it as both
+    // an Authorization bearer and an `apikey` header.
+
+    /// <summary>Project base URL, e.g. https://&lt;ref&gt;.supabase.co (no trailing slash).</summary>
+    public string Url { get; set; } = string.Empty;
+
+    /// <summary>Supabase secret key (sb_secret_...) for server-side Storage admin calls.</summary>
+    public string SecretKey { get; set; } = string.Empty;
+
+    /// <summary>Storage bucket that holds UX-page images.</summary>
+    public string StorageBucket { get; set; } = "page-images";
+
+    public bool StorageConfigured =>
+        !string.IsNullOrWhiteSpace(Url) && !string.IsNullOrWhiteSpace(SecretKey);
 }

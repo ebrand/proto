@@ -69,6 +69,83 @@ public sealed class UxPageRepository(NpgsqlDataSource dataSource)
         return id.ToString();
     }
 
+    /// <summary>True if the page exists in the given tenant + prototype.</summary>
+    public async Task<bool> PageBelongsAsync(
+        Guid tenantId, Guid prototypeId, Guid pageId, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(
+            """
+            select 1 from public.ux_pages
+            where id = @id and tenant_id = @tid and prototype_id = @pid
+            """, conn);
+        cmd.Parameters.AddWithValue("id", pageId);
+        cmd.Parameters.AddWithValue("tid", tenantId);
+        cmd.Parameters.AddWithValue("pid", prototypeId);
+        return await cmd.ExecuteScalarAsync(ct) is not null;
+    }
+
+    /// <summary>
+    /// Record an uploaded image on a page (all four image columns, per the
+    /// all-or-none DB constraint). Scoped by tenant + prototype. False if absent.
+    /// </summary>
+    public async Task<bool> SetImageAsync(
+        Guid tenantId, Guid prototypeId, Guid pageId,
+        string mediaId, string url, int width, int height, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(
+            """
+            update public.ux_pages
+            set image_media_id = @mid, image_url = @url,
+                image_width = @w, image_height = @h, updated_at = now()
+            where id = @id and tenant_id = @tid and prototype_id = @pid
+            """, conn);
+        cmd.Parameters.AddWithValue("id", pageId);
+        cmd.Parameters.AddWithValue("tid", tenantId);
+        cmd.Parameters.AddWithValue("pid", prototypeId);
+        cmd.Parameters.AddWithValue("mid", mediaId);
+        cmd.Parameters.AddWithValue("url", url);
+        cmd.Parameters.AddWithValue("w", width);
+        cmd.Parameters.AddWithValue("h", height);
+        return await cmd.ExecuteNonQueryAsync(ct) > 0;
+    }
+
+    /// <summary>
+    /// Clear a page's image columns and return the old media id (storage path)
+    /// so the caller can delete the object. Null if the page had no image or
+    /// isn't in scope.
+    /// </summary>
+    public async Task<string?> ClearImageAsync(
+        Guid tenantId, Guid prototypeId, Guid pageId, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        // The `old` CTE reads the current path before `cleared` nulls it — a
+        // plain UPDATE ... RETURNING would hand back the new (null) value.
+        await using var cmd = new NpgsqlCommand(
+            """
+            with old as (
+                select image_media_id as path
+                from public.ux_pages
+                where id = @id and tenant_id = @tid and prototype_id = @pid
+                  and image_media_id is not null
+            ),
+            cleared as (
+                update public.ux_pages
+                set image_media_id = null, image_url = null,
+                    image_width = null, image_height = null, updated_at = now()
+                where id = @id and tenant_id = @tid and prototype_id = @pid
+                  and image_media_id is not null
+                returning 1
+            )
+            select path from old
+            """, conn);
+        cmd.Parameters.AddWithValue("id", pageId);
+        cmd.Parameters.AddWithValue("tid", tenantId);
+        cmd.Parameters.AddWithValue("pid", prototypeId);
+        return await cmd.ExecuteScalarAsync(ct) as string;
+    }
+
     /// <summary>
     /// Persist a page's canvas position. Scoped by tenant + prototype so a caller
     /// cannot move a page in another tenant's (or another prototype's) canvas.

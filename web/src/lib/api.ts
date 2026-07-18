@@ -242,6 +242,80 @@ export async function createPage(
   return (await res.json()) as { id: string };
 }
 
+interface UploadUrlResponse {
+  uploadUrl: string;
+  token: string;
+  path: string;
+  publicUrl: string;
+}
+
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+
+/** Read an image file's pixel dimensions in the browser (before upload). */
+async function imageDimensions(file: File): Promise<{ width: number; height: number }> {
+  const bitmap = await createImageBitmap(file);
+  const dims = { width: bitmap.width, height: bitmap.height };
+  bitmap.close();
+  return dims;
+}
+
+/**
+ * Upload a page image in three legs: ask the API for a signed URL, PUT the
+ * bytes straight to Supabase Storage, then confirm so the API records it.
+ * Returns the public image URL.
+ */
+export async function uploadPageImage(
+  sessionToken: string,
+  prototypeId: string,
+  pageId: string,
+  file: File,
+): Promise<string> {
+  if (!IMAGE_TYPES.includes(file.type)) {
+    throw new Error('Image must be PNG, JPEG, or WebP.');
+  }
+
+  // 1. signed upload URL from our API
+  const signRes = await bearerFetch(`/api/prototypes/${prototypeId}/pages/${pageId}/image/upload-url`, sessionToken, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contentType: file.type }),
+  });
+  if (!signRes.ok) throw await asError(signRes, 'Preparing upload failed');
+  const sign = (await signRes.json()) as UploadUrlResponse;
+
+  const { width, height } = await imageDimensions(file);
+
+  // 2. PUT bytes straight to storage (uses the storage upload token, not our session)
+  const putRes = await fetch(sign.uploadUrl, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${sign.token}`, 'Content-Type': file.type },
+    body: file,
+  });
+  if (!putRes.ok) throw new Error(`Upload to storage failed (${putRes.status}).`);
+
+  // 3. confirm -> API records the image on the page
+  const confirmRes = await bearerFetch(`/api/prototypes/${prototypeId}/pages/${pageId}/image`, sessionToken, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: sign.path, width, height }),
+  });
+  if (!confirmRes.ok) throw await asError(confirmRes, 'Saving image failed');
+  const body = (await confirmRes.json()) as { imageUrl: string };
+  return body.imageUrl;
+}
+
+/** Remove a page's image (row + storage object). */
+export async function deletePageImage(
+  sessionToken: string,
+  prototypeId: string,
+  pageId: string,
+): Promise<void> {
+  const res = await bearerFetch(`/api/prototypes/${prototypeId}/pages/${pageId}/image`, sessionToken, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw await asError(res, 'Removing image failed');
+}
+
 export interface Hotspot {
   id: string;
   uxPageId: string;

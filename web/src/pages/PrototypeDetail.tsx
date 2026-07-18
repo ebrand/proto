@@ -5,10 +5,12 @@ import {
   createHotspot,
   createPage,
   deleteHotspot,
+  deletePageImage,
   getPrototype,
   listHotspots,
   listPages,
   updatePagePosition,
+  uploadPageImage,
   type Hotspot,
   type PrototypeDetail as Prototype,
   type UxPage,
@@ -70,6 +72,10 @@ export function PrototypeDetail() {
   const [linkLabel, setLinkLabel] = useState('');
   const [linkBusy, setLinkBusy] = useState(false);
   const [linkError, setLinkError] = useState('');
+
+  // Per-page image upload state.
+  const [imgBusyPage, setImgBusyPage] = useState<string | null>(null);
+  const [imgError, setImgError] = useState('');
 
   // Canvas positions, keyed by page id. Local state so dragging is smooth;
   // seeded from the server's canvasX/Y (or an auto-grid slot when unset).
@@ -242,6 +248,35 @@ export function PrototypeDetail() {
     }
   };
 
+  const onPickImage = async (pageId: string, file: File | undefined) => {
+    if (!file) return;
+    setImgBusyPage(pageId);
+    setImgError('');
+    try {
+      await uploadPageImage(bearer(), id, pageId, file);
+      await load();
+    } catch (e: unknown) {
+      setImgError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setImgBusyPage(null);
+    }
+  };
+
+  const onRemoveImage = async (pageId: string) => {
+    setImgBusyPage(pageId);
+    setImgError('');
+    try {
+      await deletePageImage(bearer(), id, pageId);
+      await load();
+    } catch (e: unknown) {
+      setImgError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setImgBusyPage(null);
+    }
+  };
+
+  const illustrativePages = pages.filter((p) => p.kind === 'illustrative');
+
   // Size the scrollable surface to contain every frame, with room to drag out.
   const surfaceW = Math.max(
     720,
@@ -404,6 +439,9 @@ export function PrototypeDetail() {
                       onPointerUp={(e) => onPointerUp(e, pg.id)}
                     >
                       <span className="frame-name">{pg.name}</span>
+                      {pg.imageUrl && (
+                        <img className="frame-thumb" src={pg.imageUrl} alt="" draggable={false} />
+                      )}
                       <div className="frame-badges">
                         <span className="badge">{pg.kind}</span>
                         {pg.isEntryPage && <span className="badge entry">entry</span>}
@@ -414,6 +452,53 @@ export function PrototypeDetail() {
                 })}
               </div>
             </div>
+          </section>
+
+          <section className="card">
+            <h2>Page images</h2>
+            {illustrativePages.length === 0 ? (
+              <p className="muted">Illustrative pages can carry a mockup image. Add one above.</p>
+            ) : (
+              <>
+                {imgError && <p className="error">{imgError}</p>}
+                <ul className="proto-list image-list">
+                  {illustrativePages.map((pg) => {
+                    const uploading = imgBusyPage === pg.id;
+                    return (
+                      <li key={pg.id}>
+                        <div className="image-row">
+                          {pg.imageUrl ? (
+                            <img className="image-thumb" src={pg.imageUrl} alt={pg.name} />
+                          ) : (
+                            <div className="image-thumb image-thumb--empty">no image</div>
+                          )}
+                          <strong>{pg.name}</strong>
+                        </div>
+                        <div className="image-actions">
+                          <label className={`filebtn${uploading ? ' disabled' : ''}`}>
+                            {uploading ? 'Uploading…' : pg.imageUrl ? 'Replace' : 'Upload'}
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp"
+                              disabled={uploading}
+                              onChange={(e) => {
+                                void onPickImage(pg.id, e.target.files?.[0]);
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
+                          {pg.imageUrl && (
+                            <button type="button" className="link" disabled={uploading} onClick={() => void onRemoveImage(pg.id)}>
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
           </section>
 
           <section className="card">
