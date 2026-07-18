@@ -69,6 +69,7 @@ if (supabaseOptions.IsConfigured)
 }
 builder.Services.AddScoped<TenantRepository>();
 builder.Services.AddScoped<PrototypeRepository>();
+builder.Services.AddScoped<UxPageRepository>();
 builder.Services.AddScoped<TenantProvisioningService>();
 builder.Services.AddScoped<InvitationsService>();
 builder.Services.AddHttpClient<ResendClient>();

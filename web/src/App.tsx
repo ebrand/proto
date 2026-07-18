@@ -5,6 +5,7 @@ import { Authenticate } from './pages/Authenticate';
 import { Dashboard } from './pages/Dashboard';
 import { Account } from './pages/Account';
 import { Prototypes } from './pages/Prototypes';
+import { PrototypeDetail } from './pages/PrototypeDetail';
 
 export default function App() {
   return (
@@ -32,6 +33,14 @@ export default function App() {
         element={
           <RequireAuth>
             <Prototypes />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/prototypes/:id"
+        element={
+          <RequireAuth>
+            <PrototypeDetail />
           </RequireAuth>
         }
       />

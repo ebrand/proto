@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useStytchB2BClient } from '@stytch/react/b2b';
 import { createPrototype, listPrototypes, type PrototypeSummary } from '../lib/api';
+// list items link to the prototype detail page
 
 type ListState = 'loading' | 'ready' | 'error';
 
@@ -142,7 +143,9 @@ export function Prototypes() {
             {items.map((p) => (
               <li key={p.id}>
                 <div>
-                  <strong>{p.name}</strong>
+                  <Link to={`/prototypes/${p.id}`}>
+                    <strong>{p.name}</strong>
+                  </Link>
                   <span className="muted"> · {p.type} · {p.status}</span>
                 </div>
                 {p.description && <div className="muted">{p.description}</div>}

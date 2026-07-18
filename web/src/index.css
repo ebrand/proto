@@ -204,6 +204,27 @@ button.link {
   border-bottom: none;
 }
 
+.proto-list a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.proto-list a:hover {
+  text-decoration: underline;
+}
+
+label.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0 1rem;
+  color: var(--muted);
+}
+
+label.checkbox input {
+  width: auto;
+}
+
 .kv {
   display: grid;
   grid-template-columns: max-content 1fr;

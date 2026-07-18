@@ -155,3 +155,64 @@ export async function createPrototype(
   if (!res.ok) throw await asError(res, 'Creating prototype failed');
   return (await res.json()) as { id: string };
 }
+
+export interface PrototypeDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  type: string;
+  status: string;
+  ownerId: string;
+  githubRepoUrl: string | null;
+  githubBranch: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Get one prototype (tenant-scoped). */
+export async function getPrototype(sessionToken: string, id: string): Promise<PrototypeDetail> {
+  const res = await bearerFetch(`/api/prototypes/${id}`, sessionToken);
+  if (!res.ok) throw await asError(res, 'Loading prototype failed');
+  return (await res.json()) as PrototypeDetail;
+}
+
+export interface UxPage {
+  id: string;
+  name: string;
+  kind: string;
+  orderIndex: number;
+  isEntryPage: boolean;
+  route: string | null;
+  imageUrl: string | null;
+  createdAt: string;
+}
+
+export interface CreatePageInput {
+  name: string;
+  kind: string;
+  orderIndex?: number;
+  isEntryPage?: boolean;
+  route?: string;
+}
+
+/** List the pages of a prototype. */
+export async function listPages(sessionToken: string, prototypeId: string): Promise<UxPage[]> {
+  const res = await bearerFetch(`/api/prototypes/${prototypeId}/pages`, sessionToken);
+  if (!res.ok) throw await asError(res, 'Loading pages failed');
+  return (await res.json()) as UxPage[];
+}
+
+/** Add a page to a prototype. */
+export async function createPage(
+  sessionToken: string,
+  prototypeId: string,
+  input: CreatePageInput,
+): Promise<{ id: string }> {
+  const res = await bearerFetch(`/api/prototypes/${prototypeId}/pages`, sessionToken, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw await asError(res, 'Creating page failed');
+  return (await res.json()) as { id: string };
+}
