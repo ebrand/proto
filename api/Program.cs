@@ -7,12 +7,14 @@ using Stytch.net.Clients;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Railway/Heroku-style hosts assign the listening port via $PORT. Bind to it
-// (on 0.0.0.0) when present; locally $PORT is unset so ASPNETCORE_URLS / the
-// launch profile still apply.
-var port = Environment.GetEnvironmentVariable("PORT");
-if (!string.IsNullOrEmpty(port))
+// Bind to 0.0.0.0 so the hosting platform can reach us — the .NET default is
+// localhost:5000, which Railway can't route to. Only override when the platform
+// hasn't set the URLs itself (UseUrls would otherwise win over ASPNETCORE_URLS,
+// breaking local dev / the launch profile). Railway doesn't inject $PORT here,
+// so default to 8080 — set the service's target port to 8080 to match.
+if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
 {
+    var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
     builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 }
 
