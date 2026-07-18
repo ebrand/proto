@@ -213,6 +213,17 @@ button.link {
   text-decoration: underline;
 }
 
+.proto-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.proto-row .play-btn {
+  flex: none;
+}
+
 label.checkbox {
   display: flex;
   align-items: center;
@@ -547,6 +558,106 @@ button.link.danger {
 
 .filebtn input {
   display: none;
+}
+
+/* --- Prototype player (full-screen run mode) --------------------------- */
+.play-btn {
+  border-color: #16a34a;
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.player-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #0b0c0f;
+  display: flex;
+  flex-direction: column;
+}
+
+.player-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 1rem;
+  background: #17181d;
+  border-bottom: 1px solid #2a2b31;
+  color: #e8e8ea;
+}
+
+.player-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-controls {
+  display: flex;
+  gap: 0.5rem;
+  flex: none;
+}
+
+.player-controls button {
+  background: #23242b;
+  border-color: #34353c;
+  color: #e8e8ea;
+}
+
+.player-controls button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.player-stage {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  overflow: auto;
+}
+
+/* Wrapper hugs the image so percentage-placed hotspots line up. */
+.player-frame {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+.player-frame img {
+  display: block;
+  max-width: 100%;
+  max-height: 82vh;
+  user-select: none;
+}
+
+.player-hotspot {
+  position: absolute;
+  padding: 0;
+  border: 2px solid transparent;
+  background: transparent;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.player-hotspot:hover {
+  border-color: rgba(59, 130, 246, 0.9);
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.player-hotspot.show {
+  border-color: rgba(59, 130, 246, 0.7);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.player-empty {
+  color: #e8e8ea;
+  text-align: center;
+  line-height: 1.6;
 }
 
 /* --- Hotspot region editor (modal) ------------------------------------- */

@@ -1,10 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useStytchB2BClient } from '@stytch/react/b2b';
-import { listPrototypes, type PrototypeSummary } from '../lib/api';
+import {
+  listHotspots,
+  listPages,
+  listPrototypes,
+  type Hotspot,
+  type PrototypeSummary,
+  type UxPage,
+} from '../lib/api';
 import { NewPrototypeWizard } from '../components/NewPrototypeWizard';
+import { PrototypePlayer } from '../components/PrototypePlayer';
 
 type ListState = 'loading' | 'ready' | 'error';
+
+interface PlayerData {
+  name: string;
+  pages: UxPage[];
+  hotspots: Hotspot[];
+}
 
 export function Prototypes() {
   const stytch = useStytchB2BClient();
@@ -12,9 +26,17 @@ export function Prototypes() {
   const [state, setState] = useState<ListState>('loading');
   const [error, setError] = useState('');
 
-  const load = useCallback(async () => {
+  const [player, setPlayer] = useState<PlayerData | null>(null);
+  const [previewBusyId, setPreviewBusyId] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState('');
+
+  const bearer = useCallback(() => {
     const tokens = stytch.session.getTokens();
-    const token = tokens?.session_jwt || tokens?.session_token || '';
+    return tokens?.session_jwt || tokens?.session_token || '';
+  }, [stytch]);
+
+  const load = useCallback(async () => {
+    const token = bearer();
     if (!token) {
       setState('error');
       setError('No active session.');
@@ -27,7 +49,22 @@ export function Prototypes() {
       setState('error');
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [stytch]);
+  }, [bearer]);
+
+  const openPreview = async (p: PrototypeSummary) => {
+    const token = bearer();
+    if (!token) return;
+    setPreviewBusyId(p.id);
+    setPreviewError('');
+    try {
+      const [pages, hotspots] = await Promise.all([listPages(token, p.id), listHotspots(token, p.id)]);
+      setPlayer({ name: p.name, pages, hotspots });
+    } catch (e: unknown) {
+      setPreviewError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPreviewBusyId(null);
+    }
+  };
 
   useEffect(() => {
     void load();
@@ -54,22 +91,42 @@ export function Prototypes() {
         {state === 'ready' && items.length === 0 && (
           <p className="muted">No prototypes yet — create one above.</p>
         )}
+        {previewError && <p className="error">{previewError}</p>}
         {state === 'ready' && items.length > 0 && (
           <ul className="proto-list">
             {items.map((p) => (
-              <li key={p.id}>
+              <li key={p.id} className="proto-row">
                 <div>
-                  <Link to={`/prototypes/${p.id}`}>
-                    <strong>{p.name}</strong>
-                  </Link>
-                  <span className="muted"> · {p.type} · {p.status}</span>
+                  <div>
+                    <Link to={`/prototypes/${p.id}`}>
+                      <strong>{p.name}</strong>
+                    </Link>
+                    <span className="muted"> · {p.type} · {p.status}</span>
+                  </div>
+                  {p.description && <div className="muted">{p.description}</div>}
                 </div>
-                {p.description && <div className="muted">{p.description}</div>}
+                <button
+                  type="button"
+                  className="play-btn"
+                  onClick={() => void openPreview(p)}
+                  disabled={previewBusyId === p.id}
+                >
+                  {previewBusyId === p.id ? 'Loading…' : '▶ Preview'}
+                </button>
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      {player && (
+        <PrototypePlayer
+          prototypeName={player.name}
+          pages={player.pages}
+          hotspots={player.hotspots}
+          onClose={() => setPlayer(null)}
+        />
+      )}
     </div>
   );
 }

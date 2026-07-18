@@ -2,6 +2,7 @@ import { type FormEvent, type PointerEvent, useCallback, useEffect, useRef, useS
 import { Link, useParams } from 'react-router-dom';
 import { useStytchB2BClient } from '@stytch/react/b2b';
 import { HotspotRegionEditor } from '../components/HotspotRegionEditor';
+import { PrototypePlayer } from '../components/PrototypePlayer';
 import {
   createHotspot,
   createPage,
@@ -82,6 +83,9 @@ export function PrototypeDetail() {
 
   // Which page's hotspot regions are being edited (modal).
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
+
+  // Play/preview mode.
+  const [playing, setPlaying] = useState(false);
 
   // Page rename/delete management.
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -399,6 +403,11 @@ export function PrototypeDetail() {
       <header className="page-header">
         <h1>{proto?.name ?? 'Prototype'}</h1>
         <nav className="nav">
+          {state === 'ready' && pages.length > 0 && (
+            <button type="button" className="play-btn" onClick={() => setPlaying(true)}>
+              ▶ Preview
+            </button>
+          )}
           <Link to="/prototypes">Prototypes</Link>
           <Link to="/dashboard">Dashboard</Link>
         </nav>
@@ -715,6 +724,15 @@ export function PrototypeDetail() {
               </ul>
             )}
           </section>
+
+          {playing && (
+            <PrototypePlayer
+              prototypeName={proto.name}
+              pages={pages}
+              hotspots={hotspots}
+              onClose={() => setPlaying(false)}
+            />
+          )}
 
           {editingPageId && (() => {
             const editPage = pages.find((p) => p.id === editingPageId);
