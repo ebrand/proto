@@ -58,6 +58,28 @@ public sealed class GitHubClient(HttpClient http)
         return new RepoInspection(true, owner, name, branch, language, supported, isPrivate, message);
     }
 
+    /// <summary>
+    /// Download the repo as a gzipped tarball (public repos). GitHub's archive
+    /// wraps everything in a single top-level dir (owner-repo-sha/) — callers
+    /// that feed this to a builder must strip it.
+    /// </summary>
+    public async Task<byte[]> DownloadTarballAsync(string owner, string repo, string? gitRef, CancellationToken ct)
+    {
+        var path = string.IsNullOrWhiteSpace(gitRef) || gitRef == "HEAD"
+            ? $"https://api.github.com/repos/{owner}/{repo}/tarball"
+            : $"https://api.github.com/repos/{owner}/{repo}/tarball/{Uri.EscapeDataString(gitRef)}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.UserAgent.ParseAdd("proto-app");
+        using var response = await http.SendAsync(request, ct); // HttpClient follows the redirect to codeload
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsByteArrayAsync(ct);
+    }
+
+    /// <summary>Public wrapper over the URL parser.</summary>
+    public static bool TryParse(string url, out string owner, out string repo) =>
+        TryParseRepo(url, out owner, out repo);
+
     /// <summary>Parse github URLs (https + git@) into owner/repo.</summary>
     private static bool TryParseRepo(string url, out string owner, out string repo)
     {

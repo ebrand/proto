@@ -6,14 +6,15 @@ interface Props {
   pages: UxPage[];
   hotspots: Hotspot[];
   onClose: () => void;
+  liveUrl?: string; // when set, render the running functional app instead of pages
 }
 
 const pct = (n: number) => `${n * 100}%`;
 
-// Read-only player: start at the entry page and click hotspot regions to
-// navigate. Illustrative pages (image + regions) only; functional pages show a
-// placeholder until the live-app runtime exists.
-export function PrototypePlayer({ prototypeName, pages, hotspots, onClose }: Props) {
+// Read-only player. For functional prototypes with a running URL it embeds the
+// live app in an iframe; otherwise it plays illustrative pages — start at the
+// entry page and click hotspot regions to navigate.
+export function PrototypePlayer({ prototypeName, pages, hotspots, onClose, liveUrl }: Props) {
   const entry = useMemo(
     () => pages.find((p) => p.isEntryPage) ?? [...pages].sort((a, b) => a.orderIndex - b.orderIndex)[0] ?? null,
     [pages],
@@ -57,6 +58,27 @@ export function PrototypePlayer({ prototypeName, pages, hotspots, onClose }: Pro
     setCurrentId(entry?.id ?? null);
     setHistory([]);
   };
+
+  // Functional prototype: embed the running app in an iframe.
+  if (liveUrl) {
+    return (
+      <div className="player-backdrop">
+        <div className="player-bar">
+          <span className="player-title">
+            <strong>{prototypeName}</strong>
+            <span className="muted"> · live</span>
+          </span>
+          <div className="player-controls">
+            <a href={liveUrl} target="_blank" rel="noopener noreferrer"><button type="button">Open in tab ↗</button></a>
+            <button type="button" onClick={onClose}>Exit</button>
+          </div>
+        </div>
+        <div className="player-stage player-stage--live">
+          <iframe className="player-live" src={liveUrl} title={prototypeName} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="player-backdrop">

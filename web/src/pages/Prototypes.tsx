@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useStytchB2BClient } from '@stytch/react/b2b';
 import {
+  getPrototype,
   listHotspots,
   listPages,
   listPrototypes,
@@ -18,6 +19,7 @@ interface PlayerData {
   name: string;
   pages: UxPage[];
   hotspots: Hotspot[];
+  liveUrl?: string;
 }
 
 export function Prototypes() {
@@ -57,6 +59,15 @@ export function Prototypes() {
     setPreviewBusyId(p.id);
     setPreviewError('');
     try {
+      if (p.type === 'functional') {
+        const detail = await getPrototype(token, p.id);
+        if (!detail.runUrl) {
+          setPreviewError(`"${p.name}" isn't running yet — open it and use Build & run first.`);
+          return;
+        }
+        setPlayer({ name: p.name, pages: [], hotspots: [], liveUrl: detail.runUrl });
+        return;
+      }
       const [pages, hotspots] = await Promise.all([listPages(token, p.id), listHotspots(token, p.id)]);
       setPlayer({ name: p.name, pages, hotspots });
     } catch (e: unknown) {
@@ -124,6 +135,7 @@ export function Prototypes() {
           prototypeName={player.name}
           pages={player.pages}
           hotspots={player.hotspots}
+          liveUrl={player.liveUrl}
           onClose={() => setPlayer(null)}
         />
       )}

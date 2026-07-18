@@ -4,6 +4,7 @@ import { useStytchB2BClient } from '@stytch/react/b2b';
 import { HotspotRegionEditor } from '../components/HotspotRegionEditor';
 import { PrototypePlayer } from '../components/PrototypePlayer';
 import {
+  buildPrototype,
   createHotspot,
   createPage,
   deleteHotspot,
@@ -13,6 +14,7 @@ import {
   listHotspots,
   listPages,
   renamePage,
+  teardownPrototype,
   updatePagePosition,
   uploadPageImage,
   type Hotspot,
@@ -87,6 +89,10 @@ export function PrototypeDetail() {
   // Play/preview mode.
   const [playing, setPlaying] = useState(false);
 
+  // Functional build+run.
+  const [buildBusy, setBuildBusy] = useState(false);
+  const [buildActionError, setBuildActionError] = useState('');
+
   // Page rename/delete management.
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -132,6 +138,41 @@ export function PrototypeDetail() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // While a build is in flight, poll — each GET reconciles server-side and
+  // flips to ready/failed, which stops the poll.
+  useEffect(() => {
+    if (proto?.buildStatus !== 'building') return;
+    const t = setInterval(() => void load(), 4000);
+    return () => clearInterval(t);
+  }, [proto?.buildStatus, load]);
+
+  const doBuild = async () => {
+    setBuildBusy(true);
+    setBuildActionError('');
+    try {
+      await buildPrototype(bearer(), id);
+      await load();
+    } catch (e: unknown) {
+      setBuildActionError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBuildBusy(false);
+    }
+  };
+
+  const doTeardown = async () => {
+    if (!window.confirm('Stop the running prototype? Its Cloud Run service will be deleted.')) return;
+    setBuildBusy(true);
+    setBuildActionError('');
+    try {
+      await teardownPrototype(bearer(), id);
+      await load();
+    } catch (e: unknown) {
+      setBuildActionError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBuildBusy(false);
+    }
+  };
 
   // Reconcile positions whenever the page set changes: a stored position always
   // wins; an unplaced page keeps any local position, else gets an auto slot;
@@ -403,7 +444,7 @@ export function PrototypeDetail() {
       <header className="page-header">
         <h1>{proto?.name ?? 'Prototype'}</h1>
         <nav className="nav">
-          {state === 'ready' && pages.length > 0 && (
+          {state === 'ready' && proto && (proto.type === 'functional' ? !!proto.runUrl : pages.length > 0) && (
             <button type="button" className="play-btn" onClick={() => setPlaying(true)}>
               ▶ Preview
             </button>
@@ -439,6 +480,46 @@ export function PrototypeDetail() {
               )}
             </dl>
           </section>
+
+          {proto.type === 'functional' && (
+            <section className="card">
+              <h2>Build &amp; run</h2>
+              {!proto.githubRepoUrl ? (
+                <p className="muted">No GitHub repo on this prototype.</p>
+              ) : (
+                <>
+                  <div className="build-row">
+                    {proto.buildStatus === 'building' && <span className="status-pill building">● Building…</span>}
+                    {proto.buildStatus === 'ready' && <span className="status-pill ready">● Running</span>}
+                    {proto.buildStatus === 'failed' && <span className="status-pill failed">● Build failed</span>}
+                    {!proto.buildStatus && <span className="status-pill">Not built yet</span>}
+
+                    {proto.buildStatus !== 'building' && (
+                      <button type="button" onClick={() => void doBuild()} disabled={buildBusy}>
+                        {buildBusy ? 'Starting…' : proto.buildStatus ? 'Rebuild' : 'Build & run'}
+                      </button>
+                    )}
+                    {proto.buildStatus === 'ready' && proto.runUrl && (
+                      <>
+                        <button type="button" className="play-btn" onClick={() => setPlaying(true)}>▶ Preview</button>
+                        <button type="button" className="link danger" onClick={() => void doTeardown()} disabled={buildBusy}>Stop</button>
+                      </>
+                    )}
+                  </div>
+                  {proto.buildStatus === 'building' && (
+                    <p className="muted">Building the repo and deploying — this takes a couple of minutes.</p>
+                  )}
+                  {proto.buildStatus === 'ready' && proto.runUrl && (
+                    <p className="build-url">
+                      <a href={proto.runUrl} target="_blank" rel="noopener noreferrer">{proto.runUrl}</a>
+                    </p>
+                  )}
+                  {proto.buildStatus === 'failed' && proto.buildError && <p className="error">{proto.buildError}</p>}
+                  {buildActionError && <p className="error">{buildActionError}</p>}
+                </>
+              )}
+            </section>
+          )}
 
           <section className="card">
             <h2>Add a page</h2>
@@ -730,6 +811,7 @@ export function PrototypeDetail() {
               prototypeName={proto.name}
               pages={pages}
               hotspots={hotspots}
+              liveUrl={proto.type === 'functional' ? (proto.runUrl ?? undefined) : undefined}
               onClose={() => setPlaying(false)}
             />
           )}

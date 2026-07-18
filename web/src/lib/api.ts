@@ -190,13 +190,28 @@ export interface PrototypeDetail {
   githubBranch: string | null;
   createdAt: string;
   updatedAt: string;
+  buildStatus: string | null; // null | building | ready | failed
+  runUrl: string | null;
+  buildError: string | null;
 }
 
-/** Get one prototype (tenant-scoped). */
+/** Get one prototype (tenant-scoped). Reconciles in-flight builds server-side. */
 export async function getPrototype(sessionToken: string, id: string): Promise<PrototypeDetail> {
   const res = await bearerFetch(`/api/prototypes/${id}`, sessionToken);
   if (!res.ok) throw await asError(res, 'Loading prototype failed');
   return (await res.json()) as PrototypeDetail;
+}
+
+/** Build + deploy a functional prototype's repo (async; poll getPrototype for status). */
+export async function buildPrototype(sessionToken: string, id: string): Promise<void> {
+  const res = await bearerFetch(`/api/prototypes/${id}/build`, sessionToken, { method: 'POST' });
+  if (!res.ok) throw await asError(res, 'Starting build failed');
+}
+
+/** Stop a running prototype (tear down its Cloud Run service). */
+export async function teardownPrototype(sessionToken: string, id: string): Promise<void> {
+  const res = await bearerFetch(`/api/prototypes/${id}/teardown`, sessionToken, { method: 'POST' });
+  if (!res.ok) throw await asError(res, 'Stopping failed');
 }
 
 export interface UxPage {

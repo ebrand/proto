@@ -68,7 +68,8 @@ public sealed class PrototypeRepository(NpgsqlDataSource dataSource)
         await using var cmd = new NpgsqlCommand(
             """
             select id, name, description, type::text, status::text, owner_id,
-                   github_repo_url, github_branch, created_at, updated_at
+                   github_repo_url, github_branch, created_at, updated_at,
+                   build_status, run_url, build_error
             from public.prototypes
             where tenant_id = @tid and id = @id
             """, conn);
@@ -87,6 +88,74 @@ public sealed class PrototypeRepository(NpgsqlDataSource dataSource)
             r.IsDBNull(6) ? null : r.GetString(6),
             r.IsDBNull(7) ? null : r.GetString(7),
             r.GetDateTime(8).ToUniversalTime().ToString("o"),
-            r.GetDateTime(9).ToUniversalTime().ToString("o"));
+            r.GetDateTime(9).ToUniversalTime().ToString("o"),
+            r.IsDBNull(10) ? null : r.GetString(10),
+            r.IsDBNull(11) ? null : r.GetString(11),
+            r.IsDBNull(12) ? null : r.GetString(12));
+    }
+
+    /// <summary>The in-flight Cloud Build id for a prototype (for reconcile).</summary>
+    public async Task<string?> GetBuildIdAsync(Guid tenantId, Guid prototypeId, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(
+            "select build_id from public.prototypes where tenant_id = @tid and id = @id", conn);
+        cmd.Parameters.AddWithValue("tid", tenantId);
+        cmd.Parameters.AddWithValue("id", prototypeId);
+        return await cmd.ExecuteScalarAsync(ct) as string;
+    }
+
+    /// <summary>Mark a build as started (status=building) with its id + service name.</summary>
+    public async Task SetBuildStartedAsync(
+        Guid tenantId, Guid prototypeId, string buildId, string runService, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(
+            """
+            update public.prototypes
+            set build_status = 'building', build_id = @bid, run_service = @svc,
+                build_error = null, last_built_at = now(), updated_at = now()
+            where tenant_id = @tid and id = @id
+            """, conn);
+        cmd.Parameters.AddWithValue("tid", tenantId);
+        cmd.Parameters.AddWithValue("id", prototypeId);
+        cmd.Parameters.AddWithValue("bid", buildId);
+        cmd.Parameters.AddWithValue("svc", runService);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>Record a terminal build outcome (ready + url, or failed + error).</summary>
+    public async Task SetBuildResultAsync(
+        Guid tenantId, Guid prototypeId, string status, string? runUrl, string? error, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(
+            """
+            update public.prototypes
+            set build_status = @st, run_url = @url, build_error = @err, updated_at = now()
+            where tenant_id = @tid and id = @id
+            """, conn);
+        cmd.Parameters.AddWithValue("tid", tenantId);
+        cmd.Parameters.AddWithValue("id", prototypeId);
+        cmd.Parameters.AddWithValue("st", status);
+        cmd.Parameters.AddWithValue("url", (object?)runUrl ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("err", (object?)error ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>Clear all build/run state (after teardown).</summary>
+    public async Task ClearRunAsync(Guid tenantId, Guid prototypeId, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(
+            """
+            update public.prototypes
+            set build_status = null, build_id = null, run_url = null,
+                run_service = null, build_error = null, updated_at = now()
+            where tenant_id = @tid and id = @id
+            """, conn);
+        cmd.Parameters.AddWithValue("tid", tenantId);
+        cmd.Parameters.AddWithValue("id", prototypeId);
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 }

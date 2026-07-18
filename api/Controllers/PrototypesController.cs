@@ -94,9 +94,107 @@ public sealed class PrototypesController(
         var me = await ResolveContextAsync(ct);
         if (me is null) return NotFound(new { error = "not_provisioned" });
 
+        var tenantId = Guid.Parse(me.Tenant.Id);
         var repo = HttpContext.RequestServices.GetRequiredService<PrototypeRepository>();
-        var proto = await repo.GetAsync(Guid.Parse(me.Tenant.Id), prototypeId, ct);
-        return proto is null ? NotFound() : Ok(proto);
+        var proto = await repo.GetAsync(tenantId, prototypeId, ct);
+        if (proto is null) return NotFound();
+
+        // Reconcile-on-read: if a build is in flight, poll Cloud Build once and
+        // self-heal to ready+url / failed. No background worker to lose.
+        if (proto.BuildStatus == "building")
+        {
+            var runner = HttpContext.RequestServices.GetRequiredService<GcpRunnerService>();
+            var buildId = runner.IsConfigured ? await repo.GetBuildIdAsync(tenantId, prototypeId, ct) : null;
+            if (buildId is not null)
+            {
+                try
+                {
+                    var (state, url, error) = await runner.CheckBuildAsync(prototypeId.ToString(), buildId, ct);
+                    if (state == GcpRunnerService.BuildState.Ready)
+                    {
+                        await repo.SetBuildResultAsync(tenantId, prototypeId, "ready", url, null, ct);
+                        proto = await repo.GetAsync(tenantId, prototypeId, ct);
+                    }
+                    else if (state == GcpRunnerService.BuildState.Failed)
+                    {
+                        await repo.SetBuildResultAsync(tenantId, prototypeId, "failed", null, error, ct);
+                        proto = await repo.GetAsync(tenantId, prototypeId, ct);
+                    }
+                }
+                catch (Exception e)
+                {
+                    logger.LogWarning(e, "Build reconcile failed for {Id}", prototypeId);
+                    // leave as building; next read retries
+                }
+            }
+        }
+        return Ok(proto);
+    }
+
+    /// <summary>Build + deploy a functional prototype's repo (kicks off; async).</summary>
+    [HttpPost("{id}/build")]
+    public async Task<IActionResult> Build(string id, CancellationToken ct)
+    {
+        if (!supabase.Value.IsConfigured)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "not_configured" });
+        if (!Guid.TryParse(id, out var prototypeId)) return NotFound();
+
+        var me = await ResolveContextAsync(ct);
+        if (me is null) return NotFound(new { error = "not_provisioned" });
+        var tenantId = Guid.Parse(me.Tenant.Id);
+
+        var repo = HttpContext.RequestServices.GetRequiredService<PrototypeRepository>();
+        var proto = await repo.GetAsync(tenantId, prototypeId, ct);
+        if (proto is null) return NotFound();
+        if (proto.Type != "functional")
+            return BadRequest(new { error = "not_functional", detail = "only functional prototypes can be built" });
+        if (string.IsNullOrWhiteSpace(proto.GithubRepoUrl))
+            return BadRequest(new { error = "no_repo" });
+
+        var runner = HttpContext.RequestServices.GetRequiredService<GcpRunnerService>();
+        if (!runner.IsConfigured)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "runtime_not_configured" });
+
+        string buildId;
+        try
+        {
+            buildId = await runner.StartBuildAsync(prototypeId.ToString(), proto.GithubRepoUrl, proto.GithubBranch, ct);
+        }
+        catch (Exception e)
+        {
+            await repo.SetBuildResultAsync(tenantId, prototypeId, "failed", null, e.Message, ct);
+            return BadRequest(new { error = "build_start_failed", detail = e.Message });
+        }
+
+        await repo.SetBuildStartedAsync(tenantId, prototypeId, buildId, GcpRunnerService.ServiceNameFor(prototypeId.ToString()), ct);
+        logger.LogInformation("Started build {BuildId} for prototype {Id}", buildId, prototypeId);
+        return Accepted(new { status = "building", buildId });
+    }
+
+    /// <summary>Stop a running prototype (delete the Cloud Run service).</summary>
+    [HttpPost("{id}/teardown")]
+    public async Task<IActionResult> Teardown(string id, CancellationToken ct)
+    {
+        if (!supabase.Value.IsConfigured)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "not_configured" });
+        if (!Guid.TryParse(id, out var prototypeId)) return NotFound();
+
+        var me = await ResolveContextAsync(ct);
+        if (me is null) return NotFound(new { error = "not_provisioned" });
+        var tenantId = Guid.Parse(me.Tenant.Id);
+
+        var repo = HttpContext.RequestServices.GetRequiredService<PrototypeRepository>();
+        var proto = await repo.GetAsync(tenantId, prototypeId, ct);
+        if (proto is null) return NotFound();
+
+        var runner = HttpContext.RequestServices.GetRequiredService<GcpRunnerService>();
+        if (runner.IsConfigured)
+        {
+            try { await runner.DeleteServiceAsync(prototypeId.ToString(), ct); }
+            catch (Exception e) { logger.LogWarning(e, "Teardown of {Id} failed", prototypeId); }
+        }
+        await repo.ClearRunAsync(tenantId, prototypeId, ct);
+        return NoContent();
     }
 
     /// <summary>Resolve the validated session to the caller's Proto user + tenant.</summary>

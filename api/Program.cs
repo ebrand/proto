@@ -25,6 +25,8 @@ builder.Services.Configure<SupabaseOptions>(
     builder.Configuration.GetSection(SupabaseOptions.SectionName));
 builder.Services.Configure<ResendOptions>(
     builder.Configuration.GetSection(ResendOptions.SectionName));
+builder.Services.Configure<GcpOptions>(
+    builder.Configuration.GetSection(GcpOptions.SectionName));
 
 // --- Stytch B2B backend client ---------------------------------------------
 // Registered lazily: the singleton is only constructed the first time a handler
@@ -72,6 +74,7 @@ builder.Services.AddScoped<PrototypeRepository>();
 builder.Services.AddScoped<UxPageRepository>();
 builder.Services.AddScoped<HotspotRepository>();
 builder.Services.AddHttpClient<SupabaseStorageClient>();
+builder.Services.AddHttpClient<GcpRunnerService>();
 builder.Services.AddHttpClient<GitHubClient>();
 builder.Services.AddScoped<TenantProvisioningService>();
 builder.Services.AddScoped<InvitationsService>();

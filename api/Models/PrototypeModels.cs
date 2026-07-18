@@ -42,4 +42,7 @@ public sealed record PrototypeDetail(
     string? GithubRepoUrl,
     string? GithubBranch,
     string CreatedAt,
-    string UpdatedAt);
+    string UpdatedAt,
+    string? BuildStatus,   // null (never built) | building | ready | failed
+    string? RunUrl,        // Cloud Run URL when ready
+    string? BuildError);
