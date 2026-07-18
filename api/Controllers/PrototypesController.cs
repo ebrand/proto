@@ -225,6 +225,34 @@ public sealed class PrototypesController(
         return Accepted(new { status = "building" });
     }
 
+    /// <summary>The Cloud Build log for a prototype's latest build (for diagnosing failures).</summary>
+    [HttpGet("{id}/build-log")]
+    public async Task<IActionResult> BuildLog(string id, CancellationToken ct)
+    {
+        if (!supabase.Value.IsConfigured)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "not_configured" });
+        if (!Guid.TryParse(id, out var prototypeId)) return NotFound();
+
+        var me = await ResolveContextAsync(ct);
+        if (me is null) return NotFound(new { error = "not_provisioned" });
+
+        var repo = HttpContext.RequestServices.GetRequiredService<PrototypeRepository>();
+        var buildId = await repo.GetBuildIdAsync(Guid.Parse(me.Tenant.Id), prototypeId, ct);
+        if (buildId is null) return Ok(new { log = "" });
+
+        var runner = HttpContext.RequestServices.GetRequiredService<GcpRunnerService>();
+        if (!runner.IsConfigured) return Ok(new { log = "" });
+        try
+        {
+            return Ok(new { log = await runner.GetBuildLogAsync(buildId, ct) });
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Build-log fetch failed for {Id}", prototypeId);
+            return Ok(new { log = "", error = e.Message });
+        }
+    }
+
     /// <summary>Stop a running prototype (delete the Cloud Run service).</summary>
     [HttpPost("{id}/teardown")]
     public async Task<IActionResult> Teardown(string id, CancellationToken ct)

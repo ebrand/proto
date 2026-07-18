@@ -10,6 +10,7 @@ import {
   deleteHotspot,
   deletePage,
   deletePageImage,
+  getBuildLog,
   getPrototype,
   listHotspots,
   listPages,
@@ -92,6 +93,9 @@ export function PrototypeDetail() {
   // Functional build+run.
   const [buildBusy, setBuildBusy] = useState(false);
   const [buildActionError, setBuildActionError] = useState('');
+  const [showLog, setShowLog] = useState(false);
+  const [buildLog, setBuildLog] = useState('');
+  const [logBusy, setLogBusy] = useState(false);
 
   // Page rename/delete management.
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -158,6 +162,23 @@ export function PrototypeDetail() {
     } finally {
       setBuildBusy(false);
     }
+  };
+
+  const loadLog = async () => {
+    setLogBusy(true);
+    try {
+      setBuildLog(await getBuildLog(bearer(), id));
+    } catch (e: unknown) {
+      setBuildLog(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLogBusy(false);
+    }
+  };
+
+  const toggleLog = async () => {
+    const next = !showLog;
+    setShowLog(next);
+    if (next) await loadLog();
   };
 
   const doTeardown = async () => {
@@ -516,6 +537,22 @@ export function PrototypeDetail() {
                   )}
                   {proto.buildStatus === 'failed' && proto.buildError && <p className="error">{proto.buildError}</p>}
                   {buildActionError && <p className="error">{buildActionError}</p>}
+
+                  {proto.buildStatus && (
+                    <div className="build-log-controls">
+                      <button type="button" className="link" onClick={() => void toggleLog()}>
+                        {showLog ? 'Hide build log' : 'View build log'}
+                      </button>
+                      {showLog && (
+                        <button type="button" className="link" onClick={() => void loadLog()} disabled={logBusy}>
+                          {logBusy ? 'Refreshing…' : 'Refresh'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {showLog && (
+                    <pre className="build-log">{logBusy && !buildLog ? 'Loading…' : buildLog || 'No log yet.'}</pre>
+                  )}
                 </>
               )}
             </section>

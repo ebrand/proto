@@ -117,6 +117,39 @@ public sealed class GcpRunnerService(HttpClient http, GitHubClient github, IOpti
         }
     }
 
+    /// <summary>
+    /// Fetch a build's log text from Cloud Logging. Returns the most recent lines
+    /// (newest builds can exceed one page; the tail holds the error) in
+    /// chronological order.
+    /// </summary>
+    public async Task<string> GetBuildLogAsync(string buildId, CancellationToken ct)
+    {
+        var token = await GetAccessTokenAsync(ct);
+        var body = new
+        {
+            resourceNames = new[] { $"projects/{Opt.ProjectId}" },
+            filter = $"logName=\"projects/{Opt.ProjectId}/logs/cloudbuild\" AND resource.labels.build_id=\"{buildId}\"",
+            orderBy = "timestamp desc",
+            pageSize = 1000,
+        };
+        using var req = new HttpRequestMessage(HttpMethod.Post, "https://logging.googleapis.com/v2/entries:list")
+        {
+            Content = JsonContent.Create(body),
+        };
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var res = await http.SendAsync(req, ct);
+        res.EnsureSuccessStatusCode();
+
+        using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
+        if (!doc.RootElement.TryGetProperty("entries", out var entries)) return "";
+
+        var lines = new List<string>();
+        foreach (var e in entries.EnumerateArray())
+            if (e.TryGetProperty("textPayload", out var tp) && tp.GetString() is { } s) lines.Add(s);
+        lines.Reverse(); // fetched newest-first; show chronological
+        return string.Join("\n", lines);
+    }
+
     /// <summary>Delete a prototype's Cloud Run service (teardown). True if gone.</summary>
     public async Task<bool> DeleteServiceAsync(string prototypeId, CancellationToken ct)
     {

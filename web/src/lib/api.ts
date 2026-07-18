@@ -214,6 +214,14 @@ export async function teardownPrototype(sessionToken: string, id: string): Promi
   if (!res.ok) throw await asError(res, 'Stopping failed');
 }
 
+/** Fetch the Cloud Build log for a prototype's latest build. */
+export async function getBuildLog(sessionToken: string, id: string): Promise<string> {
+  const res = await bearerFetch(`/api/prototypes/${id}/build-log`, sessionToken);
+  if (!res.ok) throw await asError(res, 'Loading build log failed');
+  const body = (await res.json()) as { log: string };
+  return body.log;
+}
+
 export interface UxPage {
   id: string;
   name: string;

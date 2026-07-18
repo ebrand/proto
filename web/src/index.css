@@ -700,6 +700,28 @@ button.link.danger {
   word-break: break-all;
 }
 
+.build-log-controls {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.build-log {
+  margin-top: 0.5rem;
+  max-height: 320px;
+  overflow: auto;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #0b0c0f;
+  color: #d6d9de;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* --- Hotspot region editor (modal) ------------------------------------- */
 .modal-backdrop {
   position: fixed;
