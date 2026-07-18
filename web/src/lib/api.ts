@@ -117,3 +117,41 @@ export async function acceptInvite(sessionToken: string): Promise<Me> {
   if (!res.ok) throw await asError(res, 'Accept failed');
   return (await res.json()) as Me;
 }
+
+export interface PrototypeSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  type: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface CreatePrototypeInput {
+  name: string;
+  type: string;
+  description?: string;
+  githubRepoUrl?: string;
+  githubBranch?: string;
+}
+
+/** List the caller's tenant's prototypes. */
+export async function listPrototypes(sessionToken: string): Promise<PrototypeSummary[]> {
+  const res = await bearerFetch('/api/prototypes', sessionToken);
+  if (!res.ok) throw await asError(res, 'Loading prototypes failed');
+  return (await res.json()) as PrototypeSummary[];
+}
+
+/** Create a prototype in the caller's tenant. */
+export async function createPrototype(
+  sessionToken: string,
+  input: CreatePrototypeInput,
+): Promise<{ id: string }> {
+  const res = await bearerFetch('/api/prototypes', sessionToken, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw await asError(res, 'Creating prototype failed');
+  return (await res.json()) as { id: string };
+}

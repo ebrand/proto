@@ -189,6 +189,21 @@ button.link {
   border-bottom: none;
 }
 
+.proto-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.proto-list li {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.proto-list li:last-child {
+  border-bottom: none;
+}
+
 .kv {
   display: grid;
   grid-template-columns: max-content 1fr;

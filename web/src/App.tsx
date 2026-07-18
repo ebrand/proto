@@ -4,6 +4,7 @@ import { Login } from './pages/Login';
 import { Authenticate } from './pages/Authenticate';
 import { Dashboard } from './pages/Dashboard';
 import { Account } from './pages/Account';
+import { Prototypes } from './pages/Prototypes';
 
 export default function App() {
   return (
@@ -23,6 +24,14 @@ export default function App() {
         element={
           <RequireAuth>
             <Account />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/prototypes"
+        element={
+          <RequireAuth>
+            <Prototypes />
           </RequireAuth>
         }
       />

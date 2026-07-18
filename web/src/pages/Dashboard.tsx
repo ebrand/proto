@@ -24,6 +24,7 @@ export function Dashboard() {
       <header className="page-header">
         <h1>Proto</h1>
         <nav className="nav">
+          <Link to="/prototypes">Prototypes</Link>
           <Link to="/account">Account</Link>
           <button onClick={logout}>Sign out</button>
         </nav>

@@ -68,6 +68,7 @@ if (supabaseOptions.IsConfigured)
     builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(supabaseOptions.ConnectionString));
 }
 builder.Services.AddScoped<TenantRepository>();
+builder.Services.AddScoped<PrototypeRepository>();
 builder.Services.AddScoped<TenantProvisioningService>();
 builder.Services.AddScoped<InvitationsService>();
 builder.Services.AddHttpClient<ResendClient>();
