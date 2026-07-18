@@ -105,15 +105,26 @@ public sealed class PrototypeRepository(NpgsqlDataSource dataSource)
         return await cmd.ExecuteScalarAsync(ct) as string;
     }
 
-    /// <summary>Mark a build as started (status=building) with its id + service name.</summary>
+    /// <summary>The commit SHA the running service was built from (for skip-if-unchanged).</summary>
+    public async Task<string?> GetRunCommitAsync(Guid tenantId, Guid prototypeId, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(
+            "select run_commit from public.prototypes where tenant_id = @tid and id = @id", conn);
+        cmd.Parameters.AddWithValue("tid", tenantId);
+        cmd.Parameters.AddWithValue("id", prototypeId);
+        return await cmd.ExecuteScalarAsync(ct) as string;
+    }
+
+    /// <summary>Mark a build as started (status=building) with its id, service, and the commit being built.</summary>
     public async Task SetBuildStartedAsync(
-        Guid tenantId, Guid prototypeId, string buildId, string runService, CancellationToken ct)
+        Guid tenantId, Guid prototypeId, string buildId, string runService, string? commit, CancellationToken ct)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var cmd = new NpgsqlCommand(
             """
             update public.prototypes
-            set build_status = 'building', build_id = @bid, run_service = @svc,
+            set build_status = 'building', build_id = @bid, run_service = @svc, run_commit = @commit,
                 build_error = null, last_built_at = now(), updated_at = now()
             where tenant_id = @tid and id = @id
             """, conn);
@@ -121,6 +132,7 @@ public sealed class PrototypeRepository(NpgsqlDataSource dataSource)
         cmd.Parameters.AddWithValue("id", prototypeId);
         cmd.Parameters.AddWithValue("bid", buildId);
         cmd.Parameters.AddWithValue("svc", runService);
+        cmd.Parameters.AddWithValue("commit", (object?)commit ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 

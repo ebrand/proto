@@ -76,6 +76,24 @@ public sealed class GitHubClient(HttpClient http)
         return await response.Content.ReadAsByteArrayAsync(ct);
     }
 
+    /// <summary>
+    /// Resolve the current commit SHA for a branch/ref (public repos). Used to
+    /// skip rebuilding when the repo hasn't changed. Returns null on any failure.
+    /// </summary>
+    public async Task<string?> ResolveCommitAsync(string owner, string repo, string? gitRef, CancellationToken ct)
+    {
+        var reference = string.IsNullOrWhiteSpace(gitRef) ? "HEAD" : gitRef;
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get, $"https://api.github.com/repos/{owner}/{repo}/commits/{Uri.EscapeDataString(reference)}");
+        request.Headers.UserAgent.ParseAdd("proto-app");
+        request.Headers.Accept.ParseAdd("application/vnd.github+json");
+
+        using var response = await http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode) return null;
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        return doc.RootElement.TryGetProperty("sha", out var sha) ? sha.GetString() : null;
+    }
+
     /// <summary>Public wrapper over the URL parser.</summary>
     public static bool TryParse(string url, out string owner, out string repo) =>
         TryParseRepo(url, out owner, out repo);

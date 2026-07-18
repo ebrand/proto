@@ -14,9 +14,30 @@ namespace Proto.Api.Controllers;
 [Authorize(AuthenticationSchemes = StytchAuth.Scheme)]
 public sealed class PrototypesController(
     IOptions<SupabaseOptions> supabase,
+    IServiceScopeFactory scopeFactory,
     ILogger<PrototypesController> logger) : ControllerBase
 {
     private static readonly string[] Types = ["functional", "illustrative"];
+
+    /// <summary>Resolve a repo's current commit SHA (null on any failure).</summary>
+    private static async Task<string?> ResolveShaAsync(IServiceProvider services, string repoUrl, string? branch, CancellationToken ct)
+    {
+        if (!GitHubClient.TryParse(repoUrl, out var owner, out var repo)) return null;
+        var github = services.GetRequiredService<GitHubClient>();
+        try { return await github.ResolveCommitAsync(owner, repo, branch, ct); }
+        catch { return null; }
+    }
+
+    /// <summary>Start a build+deploy and record it as building (status/id/commit).</summary>
+    private static async Task StartAndRecordAsync(
+        IServiceProvider services, Guid tenantId, Guid prototypeId, string repoUrl, string? branch, string? sha, CancellationToken ct)
+    {
+        var runner = services.GetRequiredService<GcpRunnerService>();
+        var repo = services.GetRequiredService<PrototypeRepository>();
+        var buildId = await runner.StartBuildAsync(prototypeId.ToString(), repoUrl, branch, ct);
+        await repo.SetBuildStartedAsync(
+            tenantId, prototypeId, buildId, GcpRunnerService.ServiceNameFor(prototypeId.ToString()), sha, ct);
+    }
 
     /// <summary>
     /// Inspect a GitHub repo for the define-a-prototype workflow: detect the
@@ -78,6 +99,32 @@ public sealed class PrototypesController(
             ct);
 
         logger.LogInformation("Created prototype {Id} in tenant {TenantId}", id, me.Tenant.Id);
+
+        // Warm it up: kick off the build in the background so it's ready (or
+        // building) by the time the user opens it, and the layer cache is
+        // populated. Detached from the request; failures degrade to a manual
+        // Build & run.
+        var runner = HttpContext.RequestServices.GetRequiredService<GcpRunnerService>();
+        if (type == "functional" && repoUrl is not null && runner.IsConfigured)
+        {
+            var pid = Guid.Parse(id);
+            var tenantId = Guid.Parse(me.Tenant.Id);
+            var branch = string.IsNullOrWhiteSpace(request.GithubBranch) ? null : request.GithubBranch.Trim();
+            _ = Task.Run(async () =>
+            {
+                using var scope = scopeFactory.CreateScope();
+                try
+                {
+                    var sha = await ResolveShaAsync(scope.ServiceProvider, repoUrl, branch, CancellationToken.None);
+                    await StartAndRecordAsync(scope.ServiceProvider, tenantId, pid, repoUrl, branch, sha, CancellationToken.None);
+                }
+                catch (Exception e)
+                {
+                    logger.LogWarning(e, "Auto-build on create failed for {Id}", pid);
+                }
+            });
+        }
+
         return CreatedAtAction(nameof(Get), new { id }, new { id });
     }
 
@@ -155,10 +202,18 @@ public sealed class PrototypesController(
         if (!runner.IsConfigured)
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "runtime_not_configured" });
 
-        string buildId;
+        // Skip-if-unchanged: if it's already running the current commit, reuse it.
+        var sha = await ResolveShaAsync(HttpContext.RequestServices, proto.GithubRepoUrl, proto.GithubBranch, ct);
+        if (sha is not null && proto.BuildStatus == "ready" && proto.RunUrl is not null)
+        {
+            var built = await repo.GetRunCommitAsync(tenantId, prototypeId, ct);
+            if (string.Equals(built, sha, StringComparison.Ordinal))
+                return Ok(new { status = "ready", runUrl = proto.RunUrl, skipped = true });
+        }
+
         try
         {
-            buildId = await runner.StartBuildAsync(prototypeId.ToString(), proto.GithubRepoUrl, proto.GithubBranch, ct);
+            await StartAndRecordAsync(HttpContext.RequestServices, tenantId, prototypeId, proto.GithubRepoUrl, proto.GithubBranch, sha, ct);
         }
         catch (Exception e)
         {
@@ -166,9 +221,8 @@ public sealed class PrototypesController(
             return BadRequest(new { error = "build_start_failed", detail = e.Message });
         }
 
-        await repo.SetBuildStartedAsync(tenantId, prototypeId, buildId, GcpRunnerService.ServiceNameFor(prototypeId.ToString()), ct);
-        logger.LogInformation("Started build {BuildId} for prototype {Id}", buildId, prototypeId);
-        return Accepted(new { status = "building", buildId });
+        logger.LogInformation("Started build for prototype {Id}", prototypeId);
+        return Accepted(new { status = "building" });
     }
 
     /// <summary>Stop a running prototype (delete the Cloud Run service).</summary>
