@@ -509,6 +509,124 @@ label.checkbox input {
   display: none;
 }
 
+/* --- Hotspot region editor (modal) ------------------------------------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  z-index: 100;
+}
+
+.modal {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.region-modal {
+  width: min(820px, 100%);
+}
+
+.region-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.region-head h2 {
+  margin: 0;
+}
+
+/* The image is the coordinate space — the wrapper sizes exactly to it, so
+   percentage-positioned regions line up at any display size. */
+.region-surface {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  margin: 0.75rem 0;
+  touch-action: none;
+  cursor: crosshair;
+  line-height: 0;
+}
+
+.region-surface img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+.region {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.region.existing {
+  border: 2px solid #3b82f6;
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.region.drawing {
+  border: 2px dashed #3b82f6;
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.region.pending {
+  border: 2px solid #16a34a;
+  background: rgba(22, 163, 74, 0.15);
+}
+
+.region-tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translateY(-100%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  padding: 0.1rem 0.35rem;
+  background: #3b82f6;
+  color: #fff;
+  border-radius: 4px 4px 0 0;
+}
+
+.region-x {
+  border: none;
+  background: none;
+  color: #fff;
+  padding: 0;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.region-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.region-form .field {
+  margin: 0;
+}
+
+.region-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 button {
   font: inherit;
   padding: 0.5rem 1rem;

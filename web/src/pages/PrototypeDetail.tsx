@@ -1,6 +1,7 @@
 import { type FormEvent, type PointerEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useStytchB2BClient } from '@stytch/react/b2b';
+import { HotspotRegionEditor } from '../components/HotspotRegionEditor';
 import {
   createHotspot,
   createPage,
@@ -76,6 +77,9 @@ export function PrototypeDetail() {
   // Per-page image upload state.
   const [imgBusyPage, setImgBusyPage] = useState<string | null>(null);
   const [imgError, setImgError] = useState('');
+
+  // Which page's hotspot regions are being edited (modal).
+  const [editingPageId, setEditingPageId] = useState<string | null>(null);
 
   // Canvas positions, keyed by page id. Local state so dragging is smooth;
   // seeded from the server's canvasX/Y (or an auto-grid slot when unset).
@@ -291,17 +295,54 @@ export function PrototypeDetail() {
 
   // Only page->page hotspots become arrows, and only when both endpoints exist
   // and differ.
-  const arrows = hotspots
-    .filter((h) => h.targetPageId && positions[h.uxPageId] && h.targetPageId in positions && h.uxPageId !== h.targetPageId)
-    .map((h) => {
-      const src = positions[h.uxPageId];
-      const tgt = positions[h.targetPageId as string];
-      const srcC = { x: src.x + FRAME_W / 2, y: src.y + FRAME_H / 2 };
-      const tgtC = { x: tgt.x + FRAME_W / 2, y: tgt.y + FRAME_H / 2 };
-      const start = edgePoint(srcC, FRAME_W / 2, FRAME_H / 2, tgtC);
-      const end = edgePoint(tgtC, FRAME_W / 2, FRAME_H / 2, srcC);
-      return { h, start, end, mid: { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 } };
-    });
+  const validArrows = hotspots.filter(
+    (h) => h.targetPageId && positions[h.uxPageId] && h.targetPageId in positions && h.uxPageId !== h.targetPageId,
+  );
+
+  // Group by unordered page pair so multiple links between the same two pages
+  // (e.g. a bidirectional A<->B, or duplicates) can be fanned apart instead of
+  // stacking on one line.
+  const pairKey = (h: Hotspot) => [h.uxPageId, h.targetPageId as string].sort().join('|');
+  const groups = new Map<string, Hotspot[]>();
+  for (const h of validArrows) {
+    const k = pairKey(h);
+    (groups.get(k) ?? groups.set(k, []).get(k)!).push(h);
+  }
+
+  const ARROW_SPACING = 20;
+  const arrows = validArrows.map((h) => {
+    const src = positions[h.uxPageId];
+    const tgt = positions[h.targetPageId as string];
+    const srcC = { x: src.x + FRAME_W / 2, y: src.y + FRAME_H / 2 };
+    const tgtC = { x: tgt.x + FRAME_W / 2, y: tgt.y + FRAME_H / 2 };
+    let start = edgePoint(srcC, FRAME_W / 2, FRAME_H / 2, tgtC);
+    let end = edgePoint(tgtC, FRAME_W / 2, FRAME_H / 2, srcC);
+
+    const group = groups.get(pairKey(h))!;
+    const n = group.length;
+    if (n > 1) {
+      // Perpendicular is derived from the pair's CANONICAL (sorted) direction,
+      // not this arrow's own direction, so opposite-direction links in a pair
+      // still land on distinct parallel lines rather than overlapping.
+      const [pa, pb] = [h.uxPageId, h.targetPageId as string].sort();
+      const ca = positions[pa];
+      const cb = positions[pb];
+      const cdx = cb.x - ca.x;
+      const cdy = cb.y - ca.y;
+      const clen = Math.hypot(cdx, cdy) || 1;
+      const perp = { x: -cdy / clen, y: cdx / clen };
+      const off = (group.indexOf(h) - (n - 1) / 2) * ARROW_SPACING;
+      start = { x: start.x + perp.x * off, y: start.y + perp.y * off };
+      end = { x: end.x + perp.x * off, y: end.y + perp.y * off };
+      // Push each label further out along its own offset side so labels split.
+      const extra = off >= 0 ? 10 : -10;
+      const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+      return { h, start, end, labelPos: { x: mid.x + perp.x * extra, y: mid.y + perp.y * extra } };
+    }
+    // Lone link: label centered, lifted just above the line.
+    const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    return { h, start, end, labelPos: { x: mid.x, y: mid.y - 10 } };
+  });
 
   return (
     <div className="page page--wide">
@@ -408,7 +449,7 @@ export function PrototypeDetail() {
                       <path d="M0,0 L7,3 L0,6 Z" fill="currentColor" />
                     </marker>
                   </defs>
-                  {arrows.map(({ h, start, end, mid }) => (
+                  {arrows.map(({ h, start, end, labelPos }) => (
                     <g key={h.id}>
                       <line
                         x1={start.x}
@@ -420,7 +461,7 @@ export function PrototypeDetail() {
                         markerEnd="url(#arrowhead)"
                       />
                       {h.label && (
-                        <text x={mid.x} y={mid.y - 4} className="arrow-label" textAnchor="middle">
+                        <text x={labelPos.x} y={labelPos.y} className="arrow-label" textAnchor="middle">
                           {h.label}
                         </text>
                       )}
@@ -487,6 +528,11 @@ export function PrototypeDetail() {
                               }}
                             />
                           </label>
+                          {pg.imageUrl && (
+                            <button type="button" className="filebtn" disabled={uploading} onClick={() => setEditingPageId(pg.id)}>
+                              Edit regions
+                            </button>
+                          )}
                           {pg.imageUrl && (
                             <button type="button" className="link" disabled={uploading} onClick={() => void onRemoveImage(pg.id)}>
                               Remove
@@ -560,6 +606,34 @@ export function PrototypeDetail() {
               </ul>
             )}
           </section>
+
+          {editingPageId && (() => {
+            const editPage = pages.find((p) => p.id === editingPageId);
+            if (!editPage) return null;
+            return (
+              <HotspotRegionEditor
+                page={editPage}
+                pages={pages}
+                hotspots={hotspots}
+                onClose={() => setEditingPageId(null)}
+                onCreate={async (rect, targetPageId, label) => {
+                  await createHotspot(bearer(), id, editPage.id, {
+                    targetPageId,
+                    label: label || undefined,
+                    rectX: rect.x,
+                    rectY: rect.y,
+                    rectWidth: rect.width,
+                    rectHeight: rect.height,
+                  });
+                  await load();
+                }}
+                onDelete={async (hotspotId) => {
+                  await deleteHotspot(bearer(), id, editPage.id, hotspotId);
+                  await load();
+                }}
+              />
+            );
+          })()}
         </>
       )}
     </div>
