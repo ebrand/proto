@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#
+# Start the .NET API locally after loading the Railway env vars from
+# ../auth/railway-api-envvars.json into the environment.
+#
+# Usage: ./start-with-railway-env.sh [additional dotnet run args...]
+#
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/../auth/railway-api-envvars.json"
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "error: jq is required but not installed (brew install jq)" >&2
+  exit 1
+fi
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "error: env file not found: $ENV_FILE" >&2
+  exit 1
+fi
+
+# Reject anything that isn't a flat JSON object.
+if ! jq -e 'type == "object"' "$ENV_FILE" >/dev/null 2>&1; then
+  echo "error: $ENV_FILE is not a JSON object" >&2
+  exit 1
+fi
+
+# Export every key/value pair. jq emits NUL-delimited records with the key and
+# value separated by a TAB, so values containing spaces, newlines, '=' or ';'
+# survive intact.
+while IFS=$'\t' read -r -d '' key value; do
+  export "$key=$value"
+  echo "  set $key"
+done < <(jq -j 'to_entries[] | .key + "\t" + (.value | tostring) + "\u0000"' "$ENV_FILE")
+
+echo "Loaded env vars from $ENV_FILE"
+echo "Starting API in $SCRIPT_DIR ..."
+
+cd "$SCRIPT_DIR"
+exec dotnet run "$@"
