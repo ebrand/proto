@@ -16,7 +16,8 @@ public sealed class UxPageRepository(NpgsqlDataSource dataSource)
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var cmd = new NpgsqlCommand(
             """
-            select id, name, kind::text, order_index, is_entry_page, route, image_url, created_at
+            select id, name, kind::text, order_index, is_entry_page, route, image_url,
+                   canvas_x, canvas_y, created_at
             from public.ux_pages
             where tenant_id = @tid and prototype_id = @pid
             order by order_index, created_at
@@ -36,7 +37,9 @@ public sealed class UxPageRepository(NpgsqlDataSource dataSource)
                 r.GetBoolean(4),
                 r.IsDBNull(5) ? null : r.GetString(5),
                 r.IsDBNull(6) ? null : r.GetString(6),
-                r.GetDateTime(7).ToUniversalTime().ToString("o")));
+                r.IsDBNull(7) ? null : r.GetDouble(7),
+                r.IsDBNull(8) ? null : r.GetDouble(8),
+                r.GetDateTime(9).ToUniversalTime().ToString("o")));
         }
         return result;
     }
@@ -64,5 +67,30 @@ public sealed class UxPageRepository(NpgsqlDataSource dataSource)
 
         var id = (Guid)(await cmd.ExecuteScalarAsync(ct))!;
         return id.ToString();
+    }
+
+    /// <summary>
+    /// Persist a page's canvas position. Scoped by tenant + prototype so a caller
+    /// cannot move a page in another tenant's (or another prototype's) canvas.
+    /// Returns false if no such page exists in that scope.
+    /// </summary>
+    public async Task<bool> UpdatePositionAsync(
+        Guid tenantId, Guid prototypeId, Guid pageId, double x, double y, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(
+            """
+            update public.ux_pages
+            set canvas_x = @x, canvas_y = @y, updated_at = now()
+            where id = @id and tenant_id = @tid and prototype_id = @pid
+            """, conn);
+        cmd.Parameters.AddWithValue("id", pageId);
+        cmd.Parameters.AddWithValue("tid", tenantId);
+        cmd.Parameters.AddWithValue("pid", prototypeId);
+        cmd.Parameters.AddWithValue("x", x);
+        cmd.Parameters.AddWithValue("y", y);
+
+        var affected = await cmd.ExecuteNonQueryAsync(ct);
+        return affected > 0;
     }
 }

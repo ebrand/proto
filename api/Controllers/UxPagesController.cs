@@ -54,6 +54,29 @@ public sealed class UxPagesController(
         return Created($"/api/prototypes/{protoId}/pages/{id}", new { id });
     }
 
+    /// <summary>Persist a page's position on the flow-map canvas (drag-to-move).</summary>
+    [HttpPut("{pageId}/position")]
+    public async Task<IActionResult> UpdatePosition(
+        string prototypeId, string pageId,
+        [FromBody] UpdatePagePositionRequest request, CancellationToken ct)
+    {
+        if (!Guid.TryParse(pageId, out var pgId)) return NotFound();
+        if (double.IsNaN(request.X) || double.IsNaN(request.Y) ||
+            double.IsInfinity(request.X) || double.IsInfinity(request.Y))
+        {
+            return BadRequest(new { error = "invalid_position" });
+        }
+
+        var (tenantId, protoId, guard) = await ResolveScopeAsync(prototypeId, ct);
+        if (guard is not null) return guard;
+
+        var pages = HttpContext.RequestServices.GetRequiredService<UxPageRepository>();
+        var moved = await pages.UpdatePositionAsync(tenantId, protoId, pgId, request.X, request.Y, ct);
+        if (!moved) return NotFound(new { error = "page_not_found" });
+
+        return NoContent();
+    }
+
     /// <summary>
     /// Resolve the caller to their tenant and confirm the prototype belongs to
     /// it. Returns (tenantId, prototypeId, null) on success, or (default,

@@ -19,4 +19,10 @@ public sealed record UxPageSummary(
     bool IsEntryPage,
     string? Route,
     string? ImageUrl,
+    double? CanvasX,
+    double? CanvasY,
     string CreatedAt);
+
+// The (x, y) a page occupies on the prototype's flow-map canvas. Persisted when
+// the user drags a frame; null until then (client auto-lays-out).
+public sealed record UpdatePagePositionRequest(double X, double Y);

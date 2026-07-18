@@ -207,6 +207,8 @@ export interface UxPage {
   isEntryPage: boolean;
   route: string | null;
   imageUrl: string | null;
+  canvasX: number | null;
+  canvasY: number | null;
   createdAt: string;
 }
 
@@ -238,4 +240,24 @@ export async function createPage(
   });
   if (!res.ok) throw await asError(res, 'Creating page failed');
   return (await res.json()) as { id: string };
+}
+
+/** Persist a page's position on the flow-map canvas (drag-to-move). */
+export async function updatePagePosition(
+  sessionToken: string,
+  prototypeId: string,
+  pageId: string,
+  x: number,
+  y: number,
+): Promise<void> {
+  const res = await bearerFetch(
+    `/api/prototypes/${prototypeId}/pages/${pageId}/position`,
+    sessionToken,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ x, y }),
+    },
+  );
+  if (!res.ok) throw await asError(res, 'Saving position failed');
 }

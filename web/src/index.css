@@ -295,6 +295,99 @@ label.checkbox input {
   word-break: break-all;
 }
 
+/* Wider layout for the flow-map canvas view. */
+.page--wide {
+  max-width: 1120px;
+}
+
+.canvas-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+}
+
+.canvas {
+  position: relative;
+  height: 540px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--bg);
+  /* subtle dot grid so drag distance is legible */
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.canvas-surface {
+  position: relative;
+}
+
+.frame {
+  position: absolute;
+  width: 180px;
+  min-height: 96px;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.frame.dragging {
+  cursor: grabbing;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  z-index: 10;
+}
+
+.frame.entry {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 1px #16a34a inset, 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.frame-name {
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.frame-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.badge {
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0.25rem 0.4rem;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: var(--bg);
+}
+
+.badge.entry {
+  border-color: #16a34a;
+  color: #16a34a;
+}
+
+.canvas-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  pointer-events: none;
+}
+
 button {
   font: inherit;
   padding: 0.5rem 1rem;
