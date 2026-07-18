@@ -242,6 +242,68 @@ export async function createPage(
   return (await res.json()) as { id: string };
 }
 
+export interface Hotspot {
+  id: string;
+  uxPageId: string;
+  shape: string;
+  label: string | null;
+  rectX: number | null;
+  rectY: number | null;
+  rectWidth: number | null;
+  rectHeight: number | null;
+  targetPageId: string | null;
+  targetExternalUrl: string | null;
+  createdAt: string;
+}
+
+export interface CreateHotspotInput {
+  label?: string;
+  targetPageId?: string;
+  targetExternalUrl?: string;
+  rectX?: number;
+  rectY?: number;
+  rectWidth?: number;
+  rectHeight?: number;
+}
+
+/** List every hotspot (flow-map link) across a prototype's pages. */
+export async function listHotspots(sessionToken: string, prototypeId: string): Promise<Hotspot[]> {
+  const res = await bearerFetch(`/api/prototypes/${prototypeId}/hotspots`, sessionToken);
+  if (!res.ok) throw await asError(res, 'Loading links failed');
+  return (await res.json()) as Hotspot[];
+}
+
+/** Create a link/CTA on a page, pointing at another page or an external URL. */
+export async function createHotspot(
+  sessionToken: string,
+  prototypeId: string,
+  pageId: string,
+  input: CreateHotspotInput,
+): Promise<{ id: string }> {
+  const res = await bearerFetch(`/api/prototypes/${prototypeId}/pages/${pageId}/hotspots`, sessionToken, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw await asError(res, 'Creating link failed');
+  return (await res.json()) as { id: string };
+}
+
+/** Delete a link/CTA from a page. */
+export async function deleteHotspot(
+  sessionToken: string,
+  prototypeId: string,
+  pageId: string,
+  hotspotId: string,
+): Promise<void> {
+  const res = await bearerFetch(
+    `/api/prototypes/${prototypeId}/pages/${pageId}/hotspots/${hotspotId}`,
+    sessionToken,
+    { method: 'DELETE' },
+  );
+  if (!res.ok) throw await asError(res, 'Deleting link failed');
+}
+
 /** Persist a page's position on the flow-map canvas (drag-to-move). */
 export async function updatePagePosition(
   sessionToken: string,

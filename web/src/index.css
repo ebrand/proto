@@ -388,6 +388,57 @@ label.checkbox input {
   pointer-events: none;
 }
 
+/* SVG arrow overlay sits under the frames and never eats pointer events. */
+.flow-arrows {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: #3b82f6;
+  pointer-events: none;
+}
+
+.arrow-label {
+  fill: #3b82f6;
+  font-size: 11px;
+  font-family: system-ui, sans-serif;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3px;
+}
+
+.link-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.75rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+
+.link-form .field {
+  margin: 0;
+}
+
+.link-form button[type='submit'] {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.link-form .error {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.link-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.link-list button.link {
+  flex: none;
+}
+
 button {
   font: inherit;
   padding: 0.5rem 1rem;

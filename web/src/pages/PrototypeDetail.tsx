@@ -2,10 +2,14 @@ import { type FormEvent, type PointerEvent, useCallback, useEffect, useRef, useS
 import { Link, useParams } from 'react-router-dom';
 import { useStytchB2BClient } from '@stytch/react/b2b';
 import {
+  createHotspot,
   createPage,
+  deleteHotspot,
   getPrototype,
+  listHotspots,
   listPages,
   updatePagePosition,
+  type Hotspot,
   type PrototypeDetail as Prototype,
   type UxPage,
 } from '../lib/api';
@@ -34,11 +38,22 @@ function autoPos(index: number): Pos {
   };
 }
 
+// Point on the border of a frame (centered at c, half-extents hw/hh) in the
+// direction of `toward` — so an arrow meets the frame edge, not its center.
+function edgePoint(c: Pos, hw: number, hh: number, toward: Pos): Pos {
+  const dx = toward.x - c.x;
+  const dy = toward.y - c.y;
+  if (dx === 0 && dy === 0) return c;
+  const t = 1 / Math.max(Math.abs(dx) / hw, Math.abs(dy) / hh);
+  return { x: c.x + dx * t, y: c.y + dy * t };
+}
+
 export function PrototypeDetail() {
   const { id = '' } = useParams();
   const stytch = useStytchB2BClient();
   const [proto, setProto] = useState<Prototype | null>(null);
   const [pages, setPages] = useState<UxPage[]>([]);
+  const [hotspots, setHotspots] = useState<Hotspot[]>([]);
   const [state, setState] = useState<LoadState>('loading');
   const [error, setError] = useState('');
 
@@ -48,6 +63,13 @@ export function PrototypeDetail() {
   const [isEntry, setIsEntry] = useState(false);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
+
+  // Add-a-link form.
+  const [fromPage, setFromPage] = useState('');
+  const [toPage, setToPage] = useState('');
+  const [linkLabel, setLinkLabel] = useState('');
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [linkError, setLinkError] = useState('');
 
   // Canvas positions, keyed by page id. Local state so dragging is smooth;
   // seeded from the server's canvasX/Y (or an auto-grid slot when unset).
@@ -70,9 +92,14 @@ export function PrototypeDetail() {
       return;
     }
     try {
-      const [p, pg] = await Promise.all([getPrototype(token, id), listPages(token, id)]);
+      const [p, pg, hs] = await Promise.all([
+        getPrototype(token, id),
+        listPages(token, id),
+        listHotspots(token, id),
+      ]);
       setProto(p);
       setPages(pg);
+      setHotspots(hs);
       setState('ready');
     } catch (e: unknown) {
       setState('error');
@@ -177,6 +204,44 @@ export function PrototypeDetail() {
     }
   };
 
+  const addLink = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!fromPage || !toPage) {
+      setLinkError('Pick both a source and a target page.');
+      return;
+    }
+    if (fromPage === toPage) {
+      setLinkError('A link must point at a different page.');
+      return;
+    }
+    setLinkBusy(true);
+    setLinkError('');
+    try {
+      await createHotspot(bearer(), id, fromPage, {
+        targetPageId: toPage,
+        label: linkLabel.trim() || undefined,
+      });
+      setLinkLabel('');
+      await load();
+    } catch (e: unknown) {
+      setLinkError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLinkBusy(false);
+    }
+  };
+
+  const removeLink = async (hs: Hotspot) => {
+    const token = bearer();
+    if (!token) return;
+    setLinkError('');
+    try {
+      await deleteHotspot(token, id, hs.uxPageId, hs.id);
+      await load();
+    } catch (e: unknown) {
+      setLinkError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   // Size the scrollable surface to contain every frame, with room to drag out.
   const surfaceW = Math.max(
     720,
@@ -186,6 +251,22 @@ export function PrototypeDetail() {
     480,
     ...Object.values(positions).map((p) => p.y + FRAME_H + MARGIN),
   );
+
+  const pageName = (pid: string | null) => pages.find((p) => p.id === pid)?.name ?? '(unknown)';
+
+  // Only page->page hotspots become arrows, and only when both endpoints exist
+  // and differ.
+  const arrows = hotspots
+    .filter((h) => h.targetPageId && positions[h.uxPageId] && h.targetPageId in positions && h.uxPageId !== h.targetPageId)
+    .map((h) => {
+      const src = positions[h.uxPageId];
+      const tgt = positions[h.targetPageId as string];
+      const srcC = { x: src.x + FRAME_W / 2, y: src.y + FRAME_H / 2 };
+      const tgtC = { x: tgt.x + FRAME_W / 2, y: tgt.y + FRAME_H / 2 };
+      const start = edgePoint(srcC, FRAME_W / 2, FRAME_H / 2, tgtC);
+      const end = edgePoint(tgtC, FRAME_W / 2, FRAME_H / 2, srcC);
+      return { h, start, end, mid: { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 } };
+    });
 
   return (
     <div className="page page--wide">
@@ -270,7 +351,7 @@ export function PrototypeDetail() {
           <section className="card">
             <h2>Flow map</h2>
             <div className="canvas-hint">
-              <span className="muted">Drag pages to arrange the flow.</span>
+              <span className="muted">Drag pages to arrange the flow. Arrows are links between pages.</span>
               {saveError && <span className="error">{saveError}</span>}
             </div>
             <div className="canvas" ref={canvasRef}>
@@ -278,6 +359,39 @@ export function PrototypeDetail() {
                 {pages.length === 0 && (
                   <div className="canvas-empty">No pages yet — add one above.</div>
                 )}
+                <svg className="flow-arrows" width={surfaceW} height={surfaceH}>
+                  <defs>
+                    <marker
+                      id="arrowhead"
+                      markerWidth="9"
+                      markerHeight="9"
+                      refX="7"
+                      refY="3"
+                      orient="auto"
+                      markerUnits="strokeWidth"
+                    >
+                      <path d="M0,0 L7,3 L0,6 Z" fill="currentColor" />
+                    </marker>
+                  </defs>
+                  {arrows.map(({ h, start, end, mid }) => (
+                    <g key={h.id}>
+                      <line
+                        x1={start.x}
+                        y1={start.y}
+                        x2={end.x}
+                        y2={end.y}
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        markerEnd="url(#arrowhead)"
+                      />
+                      {h.label && (
+                        <text x={mid.x} y={mid.y - 4} className="arrow-label" textAnchor="middle">
+                          {h.label}
+                        </text>
+                      )}
+                    </g>
+                  ))}
+                </svg>
                 {pages.map((pg) => {
                   const pos = positions[pg.id] ?? { x: MARGIN, y: MARGIN };
                   return (
@@ -300,6 +414,66 @@ export function PrototypeDetail() {
                 })}
               </div>
             </div>
+          </section>
+
+          <section className="card">
+            <h2>Links</h2>
+            {pages.length < 2 ? (
+              <p className="muted">Add at least two pages to link them.</p>
+            ) : (
+              <form className="link-form" onSubmit={addLink}>
+                <div className="field">
+                  <label htmlFor="fromPage">From page</label>
+                  <select id="fromPage" value={fromPage} onChange={(e) => setFromPage(e.target.value)} disabled={linkBusy}>
+                    <option value="">Select…</option>
+                    {pages.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="toPage">To page</label>
+                  <select id="toPage" value={toPage} onChange={(e) => setToPage(e.target.value)} disabled={linkBusy}>
+                    <option value="">Select…</option>
+                    {pages.filter((p) => p.id !== fromPage).map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="linkLabel">CTA label (optional)</label>
+                  <input
+                    id="linkLabel"
+                    value={linkLabel}
+                    onChange={(e) => setLinkLabel(e.target.value)}
+                    placeholder="e.g. Proceed to checkout"
+                    disabled={linkBusy}
+                  />
+                </div>
+                {linkError && <p className="error">{linkError}</p>}
+                <button type="submit" disabled={linkBusy}>
+                  {linkBusy ? 'Adding…' : 'Add link'}
+                </button>
+              </form>
+            )}
+
+            {hotspots.length > 0 && (
+              <ul className="proto-list link-list">
+                {hotspots.map((h) => (
+                  <li key={h.id}>
+                    <span>
+                      <strong>{pageName(h.uxPageId)}</strong>
+                      <span className="muted"> → </span>
+                      <strong>{h.targetPageId ? pageName(h.targetPageId) : h.targetExternalUrl}</strong>
+                      {h.label && <span className="muted"> · {h.label}</span>}
+                    </span>
+                    <button type="button" className="link" onClick={() => void removeLink(h)}>
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </>
       )}
